@@ -1,2 +1,40 @@
+# Compiled binaries 
 KeyboardGuard
+*.o
+*.dSYM
+
+# Release artifacts
+KeyboardGuard-*/
+KeyboardGuard-*.tar.gz
+releases/
+
+# Build artifacts
+.build/
+build/
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Logs
+*.log
+
+# Configuration backups
+languages.json.bak
+*.backup
