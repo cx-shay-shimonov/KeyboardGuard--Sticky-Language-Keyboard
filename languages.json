@@ -1,0 +1,47 @@
+{
+  "supportedLanguages": {
+    "english": "com.apple.keylayout.ABC",
+    "us": "com.apple.keylayout.US",
+    "british": "com.apple.keylayout.British",
+    "australian": "com.apple.keylayout.Australian",
+    
+    "hebrew": "com.apple.keylayout.Hebrew",
+    "portuguese": "com.apple.keylayout.Portuguese",
+    "spanish": "com.apple.keylayout.Spanish",
+    "french": "com.apple.keylayout.French",
+    "german": "com.apple.keylayout.German",
+    "italian": "com.apple.keylayout.Italian",
+    "russian": "com.apple.keylayout.Russian",
+    "dutch": "com.apple.keylayout.Dutch",
+    "swedish": "com.apple.keylayout.Swedish",
+    "norwegian": "com.apple.keylayout.Norwegian",
+    "danish": "com.apple.keylayout.Danish",
+    "finnish": "com.apple.keylayout.Finnish",
+    "polish": "com.apple.keylayout.Polish",
+    "czech": "com.apple.keylayout.Czech",
+    "hungarian": "com.apple.keylayout.Hungarian",
+    "greek": "com.apple.keylayout.Greek",
+    "turkish": "com.apple.keylayout.Turkish",
+    
+    "arabic": "com.apple.keylayout.Arabic",
+    "chinese": "com.apple.keylayout.Chinese-Traditional",
+    "simplified-chinese": "com.apple.keylayout.Chinese-Simplified",
+    "japanese": "com.apple.keylayout.Japanese",
+    "korean": "com.apple.keylayout.Korean",
+    "thai": "com.apple.keylayout.Thai",
+    "vietnamese": "com.apple.keylayout.Vietnamese",
+    
+    "hindi": "com.apple.keylayout.Devanagari",
+    "urdu": "com.apple.keylayout.Urdu",
+    "persian": "com.apple.keylayout.Persian",
+    "bulgarian": "com.apple.keylayout.Bulgarian",
+    "croatian": "com.apple.keylayout.Croatian",
+    "romanian": "com.apple.keylayout.Romanian",
+    "ukrainian": "com.apple.keylayout.Ukrainian"
+  },
+  "defaultConfiguration": {
+    "idleTimeout": 10.0,
+    "defaultLanguage": "english",
+    "checkInterval": 2.0
+  }
+}

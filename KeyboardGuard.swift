@@ -8,58 +8,119 @@ import IOKit
 
 // MARK: - Configuration
 
-// Language mapping for common languages to their macOS Input Source IDs
-let supportedLanguages: [String: String] = [
-    // English variants
-    "english": "com.apple.keylayout.ABC",
-    "us": "com.apple.keylayout.US",
-    "british": "com.apple.keylayout.British",
-    "australian": "com.apple.keylayout.Australian",
+/// Configuration structure that mirrors the JSON file
+struct Configuration: Codable {
+    let supportedLanguages: [String: String]
+    let defaultConfiguration: DefaultConfiguration
     
-    // European languages
-    "hebrew": "com.apple.keylayout.Hebrew",
-    "portuguese": "com.apple.keylayout.Portuguese",
-    "spanish": "com.apple.keylayout.Spanish",
-    "french": "com.apple.keylayout.French",
-    "german": "com.apple.keylayout.German",
-    "italian": "com.apple.keylayout.Italian",
-    "russian": "com.apple.keylayout.Russian",
-    "dutch": "com.apple.keylayout.Dutch",
-    "swedish": "com.apple.keylayout.Swedish",
-    "norwegian": "com.apple.keylayout.Norwegian",
-    "danish": "com.apple.keylayout.Danish",
-    "finnish": "com.apple.keylayout.Finnish",
-    "polish": "com.apple.keylayout.Polish",
-    "czech": "com.apple.keylayout.Czech",
-    "hungarian": "com.apple.keylayout.Hungarian",
-    "greek": "com.apple.keylayout.Greek",
-    "turkish": "com.apple.keylayout.Turkish",
-    
-    // Asian languages
-    "arabic": "com.apple.keylayout.Arabic",
-    "chinese": "com.apple.keylayout.Chinese-Traditional",
-    "simplified-chinese": "com.apple.keylayout.Chinese-Simplified",
-    "japanese": "com.apple.keylayout.Japanese",
-    "korean": "com.apple.keylayout.Korean",
-    "thai": "com.apple.keylayout.Thai",
-    "vietnamese": "com.apple.keylayout.Vietnamese",
-    
-    // Other common languages
-    "hindi": "com.apple.keylayout.Devanagari",
-    "urdu": "com.apple.keylayout.Urdu",
-    "persian": "com.apple.keylayout.Persian",
-    "bulgarian": "com.apple.keylayout.Bulgarian",
-    "croatian": "com.apple.keylayout.Croatian",
-    "romanian": "com.apple.keylayout.Romanian",
-    "ukrainian": "com.apple.keylayout.Ukrainian"
-]
+    struct DefaultConfiguration: Codable {
+        let idleTimeout: TimeInterval
+        let defaultLanguage: String
+        let checkInterval: TimeInterval
+    }
+}
 
-// Default configuration
-let defaultIdleTimeout: TimeInterval = 10.0 // Default: 10 seconds
-let defaultDefaultLanguage: String = "english" // Default language to switch TO
+/// Global configuration loaded from JSON file
+var globalConfig: Configuration!
 
-// The interval (in seconds) to check the system idle time.
-let checkInterval: TimeInterval = 2.0 // Check every 2 seconds for more responsive testing
+/// Loads configuration from languages.json file
+func loadConfiguration() -> Configuration {
+    let configFileName = "languages.json"
+    
+    // Try to find the config file in the same directory as the executable
+    var configURL: URL
+    
+    if let executablePath = ProcessInfo.processInfo.arguments.first {
+        let executableURL = URL(fileURLWithPath: executablePath)
+        configURL = executableURL.deletingLastPathComponent().appendingPathComponent(configFileName)
+    } else {
+        // Fallback to current directory
+        configURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(configFileName)
+    }
+    
+    // Try loading from executable directory first, then current directory
+    let possiblePaths = [
+        configURL,
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(configFileName)
+    ]
+    
+    for url in possiblePaths {
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            let config = try decoder.decode(Configuration.self, from: data)
+            print("Configuration loaded from: \(url.path)")
+            return config
+        } catch {
+            continue // Try next path
+        }
+    }
+    
+    // If we can't load the config file, create a default one and use fallback values
+    print("Warning: Could not load \(configFileName). Creating default configuration file.")
+    createDefaultConfigFile(at: possiblePaths[1]) // Create in current directory
+    
+    // Return fallback configuration
+    return Configuration(
+        supportedLanguages: [
+            "english": "com.apple.keylayout.ABC",
+            "hebrew": "com.apple.keylayout.Hebrew",
+            "portuguese": "com.apple.keylayout.Portuguese",
+            "spanish": "com.apple.keylayout.Spanish",
+            "french": "com.apple.keylayout.French",
+            "german": "com.apple.keylayout.German"
+        ],
+        defaultConfiguration: Configuration.DefaultConfiguration(
+            idleTimeout: 10.0,
+            defaultLanguage: "english",
+            checkInterval: 2.0
+        )
+    )
+}
+
+/// Creates a default configuration file
+func createDefaultConfigFile(at url: URL) {
+    let defaultConfig = Configuration(
+        supportedLanguages: [
+            "english": "com.apple.keylayout.ABC",
+            "us": "com.apple.keylayout.US",
+            "british": "com.apple.keylayout.British",
+            "hebrew": "com.apple.keylayout.Hebrew",
+            "portuguese": "com.apple.keylayout.Portuguese",
+            "spanish": "com.apple.keylayout.Spanish",
+            "french": "com.apple.keylayout.French",
+            "german": "com.apple.keylayout.German",
+            "italian": "com.apple.keylayout.Italian",
+            "russian": "com.apple.keylayout.Russian"
+        ],
+        defaultConfiguration: Configuration.DefaultConfiguration(
+            idleTimeout: 10.0,
+            defaultLanguage: "english",
+            checkInterval: 2.0
+        )
+    )
+    
+    do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(defaultConfig)
+        try data.write(to: url)
+        print("Default configuration file created at: \(url.path)")
+        print("You can edit this file to add more languages.")
+    } catch {
+        print("Warning: Could not create default configuration file: \(error)")
+    }
+}
+
+// Load configuration at startup
+let jsonConfig = loadConfiguration()
+globalConfig = jsonConfig
+
+// Make configuration easily accessible
+let supportedLanguages = globalConfig.supportedLanguages
+let defaultIdleTimeout = globalConfig.defaultConfiguration.idleTimeout
+let defaultDefaultLanguage = globalConfig.defaultConfiguration.defaultLanguage
+let checkInterval = globalConfig.defaultConfiguration.checkInterval
 
 // MARK: - TIS (Text Input Services) Utilities
 
@@ -559,17 +620,17 @@ func showHelp() {
 
 // MARK: - Program Entry
 
-let config = parseCommandLineArguments()
-let keyboardGuard = KeyboardGuard(idleTimeout: config.timeout, defaultLanguage: config.defaultLanguage)
+let cmdConfig = parseCommandLineArguments()
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage)
 
 if keyboardGuard.defaultSource == nil {
-    print("FATAL ERROR: The default input source could not be found. Please ensure \(config.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
+    print("FATAL ERROR: The default input source could not be found. Please ensure \(cmdConfig.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
     exit(1)
 } else {
     print("KeyboardGuard is starting.")
-    print("Default language: \(config.defaultLanguage.capitalized)")
-    print("Behavior: Any non-\(config.defaultLanguage) language -> \(config.defaultLanguage.capitalized)")
-    print("Idle timeout: \(config.timeout) seconds")
+    print("Default language: \(cmdConfig.defaultLanguage.capitalized)")
+    print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
+    print("Idle timeout: \(cmdConfig.timeout) seconds")
     print("Check interval: \(checkInterval) seconds")
     print("Monitoring...")
     fflush(stdout)

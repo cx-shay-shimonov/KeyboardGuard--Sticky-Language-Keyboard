@@ -17,6 +17,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - ✅ **Language validation**: Automatically checks if languages are enabled on your system
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
 - 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
+- 📝 **Extensible configuration**: JSON configuration file allows users to add custom languages
 
 ### How it works
 
@@ -35,6 +36,8 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - Xcode Command Line Tools (for Swift compiler)
 
 **Language Validation**: KeyboardGuard automatically detects which languages are available on your system and validates your selections. Use `./KeyboardGuard --help` to see available languages.
+
+**Configuration File**: KeyboardGuard uses a `languages.json` file to define supported languages and default settings. If the file doesn't exist, it will be created automatically with default values.
 
 ## Installation
 
@@ -55,6 +58,59 @@ swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Car
 ```
 
 This creates an executable file named `KeyboardGuard`.
+
+## Configuration
+
+KeyboardGuard uses a `languages.json` configuration file to define supported languages and default settings. This file is automatically created if it doesn't exist.
+
+### Configuration File Structure
+
+```json
+{
+  "supportedLanguages": {
+    "english": "com.apple.keylayout.ABC",
+    "hebrew": "com.apple.keylayout.Hebrew",
+    "portuguese": "com.apple.keylayout.Portuguese",
+    "spanish": "com.apple.keylayout.Spanish",
+    "french": "com.apple.keylayout.French"
+  },
+  "defaultConfiguration": {
+    "idleTimeout": 10.0,
+    "defaultLanguage": "english",
+    "checkInterval": 2.0
+  }
+}
+```
+
+### Adding Custom Languages
+
+You can add support for additional languages by editing the `languages.json` file:
+
+1. **Find the macOS input source ID** for your language:
+   ```bash
+   # Method 1: Use the helper script to find input source IDs
+   ./find_input_sources.swift
+   
+   # Method 2: Check what's available on your system
+   ./KeyboardGuard --help  # Shows available languages on your system
+   ```
+
+2. **Add the language to the JSON file**:
+   ```json
+   "supportedLanguages": {
+     "your-language": "com.apple.keylayout.YourLanguage"
+   }
+   ```
+
+3. **Restart KeyboardGuard** to load the new configuration
+
+### Configuration File Location
+
+KeyboardGuard looks for `languages.json` in:
+1. The same directory as the KeyboardGuard executable
+2. The current working directory
+
+If not found, a default configuration file will be created automatically.
 
 ## Usage
 
