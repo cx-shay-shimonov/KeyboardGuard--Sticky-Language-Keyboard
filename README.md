@@ -53,7 +53,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
    ```bash
    tar -xzf KeyboardGuard-macOS.tar.gz
    cd KeyboardGuard-*/
-   ./install.sh
+   ./install.sh    # Automatically handles macOS security attributes
    ```
 
 3. **Run KeyboardGuard**:
@@ -62,7 +62,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
    ./KeyboardGuard --help             # Show all options
    ```
 
-**✅ Benefits**: No compilation needed, includes all dependencies, ready to use immediately.
+**✅ Benefits**: No compilation needed, includes all dependencies, automatically handles macOS security warnings, ready to use immediately.
 
 ### Option B: Compile from Source 🔨
 
@@ -433,6 +433,34 @@ KeyboardGuard may request accessibility permissions to monitor keyboard events g
 4. Enable the checkbox next to KeyboardGuard
 
 ## Troubleshooting
+
+### macOS Security Warning ("malware" dialog)
+
+If you get a dialog saying *"Apple could not verify KeyboardGuard is free of malware"*:
+
+**Solution 1 (Automatic - Recommended):**
+```bash
+# The install.sh script handles this automatically
+tar -xzf KeyboardGuard-v1.0.0.tar.gz
+cd KeyboardGuard-v1.0.0/
+./install.sh    # Automatically removes quarantine attributes
+./KeyboardGuard --help
+```
+
+**Solution 2 (Manual):**
+```bash
+# Remove quarantine attribute manually
+xattr -r -d com.apple.quarantine KeyboardGuard
+chmod +x KeyboardGuard
+./KeyboardGuard --help
+```
+
+**Solution 3 (GUI Method):**
+1. Right-click on `KeyboardGuard` → **"Open"**
+2. Click **"Open"** in the security dialog
+3. Run normally: `./KeyboardGuard`
+
+**Why this happens:** The binary isn't signed with Apple Developer Program credentials ($99/year). This is normal for open-source projects.
 
 ### Language not enabled error
 
