@@ -18,27 +18,23 @@ xattr -cr . 2>/dev/null || true
 # Make executable
 chmod +x KeyboardGuard find_input_sources.swift
 
-# Check if KeyboardGuard can be executed
-echo "   Testing binary execution..."
-if ./KeyboardGuard --version >/dev/null 2>&1; then
-    echo "   ✅ Binary executes without warnings"
-elif xattr -l KeyboardGuard 2>/dev/null | grep -q quarantine; then
+# Check for quarantine attributes
+echo "   Checking for quarantine attributes..."
+if xattr -l KeyboardGuard 2>/dev/null | grep -q quarantine; then
     echo "   ⚠️  Quarantine detected. Attempting to fix..."
-    
-    # Try to remove quarantine with more forceful methods
     sudo xattr -cr . 2>/dev/null || true
     
-    # If still problematic, inform user of manual solution
-    if ! ./KeyboardGuard --version >/dev/null 2>&1; then
-        echo "   ⚠️  Manual intervention required:"
-        echo "      Run: sudo spctl --master-disable"
-        echo "      Then: System Preferences > Security & Privacy > Allow apps from anywhere"
-        echo "      After running KeyboardGuard once, you can re-enable Gatekeeper"
+    if xattr -l KeyboardGuard 2>/dev/null | grep -q quarantine; then
+        echo "   ⚠️  Could not remove quarantine. Manual steps:"
+        echo "      1. Right-click KeyboardGuard → Open (then click 'Open' in dialog)"
+        echo "      2. Or temporarily disable Gatekeeper:"
+        echo "         sudo spctl --master-disable"
+        echo "         (Remember to re-enable later with: sudo spctl --master-enable)"
+    else
+        echo "   ✅ Quarantine removed successfully"
     fi
 else
-    echo "   ⚠️  Unknown execution issue. You may need to:"
-    echo "      1. Right-click KeyboardGuard → Open"
-    echo "      2. Or run: sudo spctl --master-disable (temporarily)"
+    echo "   ✅ No quarantine detected - binary should run without issues"
 fi
 
 echo ""
