@@ -1,8 +1,10 @@
 import Foundation
 // The Carbon module contains the necessary C functions for Text Input Services (TIS).
 import Carbon
-// AppKit for keyboard event monitoring
+// AppKit for NSEvent.addLocalMonitorForEvents fallback
 import AppKit
+// IOKit for system idle time detection via HIDIdleTime
+import IOKit
 
 // MARK: - Configuration
 
@@ -155,40 +157,58 @@ func selectInputSource(_ source: TISInputSource) {
     }
 }
 
-// MARK: - Keyboard Idle Time Utility
+// MARK: - System Idle Time Utility
 
-/// Tracks when keyboard activity occurs (separate from Hebrew idle timing)
-class KeyboardActivityMonitor {
-    private var lastKeyboardEventTime: Date = Date()
-    private var eventMonitor: Any?
+/// Gets system idle time using IOKit HIDIdleTime - more reliable than AppKit events
+class SystemIdleTimeMonitor {
     
     init() {
-        setupKeyboardMonitor()
-        print("Keyboard activity monitor initialized...")
+        print("System idle time monitor initialized...")
     }
     
-    deinit {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
-    }
-    
-    /// Sets up a global keyboard event monitor to track keyboard activity
-    private func setupKeyboardMonitor() {
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
-            self?.lastKeyboardEventTime = Date()
+    /// Gets the system idle time in seconds using IOKit
+    func getSystemIdleTime() -> TimeInterval {
+        var iterator: io_iterator_t = 0
+        let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"), &iterator)
+        
+        if result != KERN_SUCCESS {
+            return 0.0
         }
         
-        // Also monitor local events (when app has focus)
-        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
-            self?.lastKeyboardEventTime = Date()
-            return event
+        defer { IOObjectRelease(iterator) }
+        
+        let entry = IOIteratorNext(iterator)
+        if entry == 0 {
+            return 0.0
         }
-    }
-    
-    /// Gets the time since the last keyboard event in seconds
-    func getTimeSinceLastKeyboardEvent() -> TimeInterval {
-        return Date().timeIntervalSince(lastKeyboardEventTime)
+        
+        defer { IOObjectRelease(entry) }
+        
+        var properties: Unmanaged<CFMutableDictionary>?
+        let propertiesResult = IORegistryEntryCreateCFProperties(entry, &properties, kCFAllocatorDefault, 0)
+        
+        if propertiesResult != KERN_SUCCESS {
+            return 0.0
+        }
+        
+        guard let dict = properties?.takeRetainedValue() else {
+            return 0.0
+        }
+        
+        let key = "HIDIdleTime" as CFString
+        guard let idleTimeNumber = CFDictionaryGetValue(dict, Unmanaged.passUnretained(key).toOpaque()) else {
+            return 0.0
+        }
+        
+        var idleTimeValue: Int64 = 0
+        let success = CFNumberGetValue(unsafeBitCast(idleTimeNumber, to: CFNumber.self), .sInt64Type, &idleTimeValue)
+        
+        if !success {
+            return 0.0
+        }
+        
+        // Convert from nanoseconds to seconds
+        return Double(idleTimeValue) / 1_000_000_000.0
     }
 }
 
@@ -243,8 +263,8 @@ class NonDefaultLanguageTimer {
 class KeyboardGuard {
     // Store a reference to the default source once to avoid repeated lookups.
     var defaultSource: TISInputSource?
-    // Monitor keyboard activity globally
-    private let keyboardMonitor = KeyboardActivityMonitor()
+    // Monitor system idle time
+    private let systemIdleMonitor = SystemIdleTimeMonitor()
     // Manage non-default language-specific idle timing
     private let nonDefaultLanguageTimer = NonDefaultLanguageTimer()
     // Configurable idle timeout
@@ -254,6 +274,8 @@ class KeyboardGuard {
     private let defaultLanguageName: String
     // Track previous language to detect switches
     private var previousLanguageID: String?
+    // Track previous global idle time to detect typing
+    private var previousGlobalIdleTime: TimeInterval = 0
     
     init(idleTimeout: TimeInterval, defaultLanguage: String) {
         self.idleTimeout = idleTimeout
@@ -269,6 +291,8 @@ class KeyboardGuard {
         
         // Look up the default input source once at startup.
         defaultSource = findInputSource(by: defaultInputSourceID)
+        
+        print("Note: Using system idle time via IOKit for reliable typing detection.")
     }
     
     /// Helper function to get language name from input source ID
@@ -280,6 +304,15 @@ class KeyboardGuard {
         }
         return "unknown"
     }
+    
+    /// Check if currently in default language
+    func isCurrentlyInDefaultLanguage() -> Bool {
+        guard let currentID = getCurrentInputSourceID() else {
+            return false
+        }
+        return currentID == defaultInputSourceID
+    }
+    
 
     /// The core function that checks the current state and switches the keyboard if necessary.
     @objc func runLanguageCheck() {
@@ -300,17 +333,28 @@ class KeyboardGuard {
     let switchedToNonDefault = !isCurrentlyDefault && wasDefaultPreviously
     let switchedToDefault = isCurrentlyDefault && !wasDefaultPreviously
     
-    // Get current keyboard activity status
-    let timeSinceLastKeyboard = keyboardMonitor.getTimeSinceLastKeyboardEvent()
-    let isCurrentlyTyping = timeSinceLastKeyboard < 1.0 // Consider "typing" if keystroke within 1 second
+    // Get current system idle time
+    let systemIdleTime = systemIdleMonitor.getSystemIdleTime()
+    let isCurrentlyTyping = systemIdleTime < 1.0 // Consider "typing" if system idle < 1 second
     
     // Handle non-default language session management
     if switchedToNonDefault {
         let currentLanguageName = getLanguageNameFromID(currentID)
         print("[\(Date())] Switched TO \(currentLanguageName.capitalized) (non-default)")
         nonDefaultLanguageTimer.startNonDefaultLanguageSession(languageName: currentLanguageName)
+        // IMPORTANT: Reset timer immediately when switching to secondary language
+        nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
+        print("[\(Date())] Timer reset due to language switch")
     } else if switchedToDefault {
         nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
+    } else if !isCurrentlyDefault && !nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
+        // Handle case where we start in non-default language or session wasn't initialized
+        let currentLanguageName = getLanguageNameFromID(currentID)
+        print("[\(Date())] Initializing session for \(currentLanguageName.capitalized) (already active)")
+        nonDefaultLanguageTimer.startNonDefaultLanguageSession(languageName: currentLanguageName)
+        // IMPORTANT: Reset timer immediately when initializing session
+        nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
+        print("[\(Date())] Timer reset due to session initialization")
     }
     
     // Update previous language for next check
@@ -319,20 +363,33 @@ class KeyboardGuard {
     // Main logic
     if !isCurrentlyDefault {
         // Currently in any non-default language
+        let currentLanguageName = getLanguageNameFromID(currentID)
         
-        // Record activity if user is currently typing
-        if isCurrentlyTyping {
+        // Initialize session if needed (fallback for polling-based detection)
+        if !nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
+            print("[\(Date())] Starting timer for \(currentLanguageName.capitalized) (polling fallback)")
+            nonDefaultLanguageTimer.startNonDefaultLanguageSession(languageName: currentLanguageName)
             nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
         }
         
-        // Get non-default language idle time
-        if let nonDefaultIdleTime = nonDefaultLanguageTimer.getNonDefaultLanguageIdleTime(),
-           let currentLangName = nonDefaultLanguageTimer.getCurrentLanguageName() {
-            print("[\(Date())] Active: \(currentName). \(currentLangName.capitalized) Idle Time: \(String(format: "%.1f", nonDefaultIdleTime))s. Typing: \(isCurrentlyTyping)")
+        // Detect typing by checking if system idle time decreased or is very small
+        let typingDetected = systemIdleTime < previousGlobalIdleTime || systemIdleTime < 0.5
+        
+        if typingDetected && nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
+            nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
+            print("[\(Date())] Timer reset due to typing detected (system idle: \(String(format: "%.1f", systemIdleTime))s, prev: \(String(format: "%.1f", previousGlobalIdleTime))s)")
+        }
+        
+        // Update previous idle time for next comparison
+        previousGlobalIdleTime = systemIdleTime
+        
+        // Use secondary language timer for switching decision
+        if let secondaryIdleTime = nonDefaultLanguageTimer.getNonDefaultLanguageIdleTime() {
+            print("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. System: \(String(format: "%.1f", systemIdleTime))s. Typing: \(isCurrentlyTyping)")
             
-            // Switch if idle long enough
-            if nonDefaultIdleTime >= idleTimeout {
-                print("[\(Date())] \(currentLangName.capitalized) idle time exceeded \(idleTimeout)s. Switching to \(defaultLanguageName.capitalized).")
+            // Switch based on secondary language idle time
+            if secondaryIdleTime >= idleTimeout {
+                print("[\(Date())] \(currentLanguageName.capitalized) idle time exceeded \(idleTimeout)s. Switching to \(defaultLanguageName.capitalized).")
                 
                 guard let sourceToSwitchTo = defaultSource else {
                     print("[\(Date())] Error: Default input source ('\(defaultInputSourceID)') not found.")
@@ -343,8 +400,7 @@ class KeyboardGuard {
                 nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
             }
         } else {
-            let currentLanguageName = getLanguageNameFromID(currentID)
-            print("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) session not initialized.")
+            print("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) timer not initialized.")
         }
     } else {
         // Currently in default language

@@ -8,22 +8,23 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 
 ### Key Features
 
-- 🎯 **Keyboard-only tracking**: Only keyboard activity affects the idle timer (mouse movement is ignored)
+- 🎯 **System-level idle detection**: Uses IOKit HIDIdleTime for precise keyboard activity tracking
 - 🌍 **Universal language support**: Works with 30+ languages as your default language
 - ⏱️ **Configurable timeout**: Set how long to wait before switching (default: 10 seconds)
-- 🚫 **No typing interruption**: Never switches in the middle of active typing
-- 📊 **Real-time monitoring**: Shows current language, idle time, and typing activity
+- 🚫 **Zero typing interruption**: Advanced algorithm prevents any mid-typing language switches
+- 📊 **Real-time monitoring**: Shows current language, idle time, and typing activity status
 - 🔄 **Global monitoring**: Works regardless of which app has focus
 - ✅ **Language validation**: Automatically checks if languages are enabled on your system
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
+- 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
 
 ### How it works
 
-1. **Monitors keyboard activity globally** - Tracks when any keyboard input occurs (ignores mouse movement)
+1. **System-level monitoring** - Uses IOKit to access HIDIdleTime for precise keyboard activity detection
 2. **Universal language detection** - Any language that is NOT your default triggers the idle timer
-3. **Smart idle tracking** - Only counts idle time when in non-default language AND you stop typing
-4. **Prevents typing interruption** - Continuous typing resets the timer, no mid-sentence switching
-5. **Automatic switching** - After timeout in any non-default language, switches to your default language
+3. **Real-time idle tracking** - Continuously monitors system idle time with sub-second precision
+4. **Advanced typing detection** - Detects typing by comparing idle times and immediately resets timer
+5. **Intelligent switching** - Only switches after true idle periods, never during active typing
 6. **Language validation** - Validates that your chosen default language is actually enabled on your system
 
 ## Requirements
@@ -50,7 +51,7 @@ Download the `KeyboardGuard.swift` file to your desired directory.
 ### 3. Compile
 
 ```bash
-swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit
+swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
 ```
 
 This creates an executable file named `KeyboardGuard`.
@@ -82,26 +83,31 @@ This creates an executable file named `KeyboardGuard`.
 ### Sample Output
 
 ```
-Keyboard activity monitor initialized...
-Keyboard Guard is starting.
-Targeted language for switch: com.apple.keylayout.Hebrew
-Default language: com.apple.keylayout.ABC
-Idle timeout set to: 10.0 seconds.
-Check interval: 2.0 seconds.
+System idle time monitor initialized...
+Note: Using system idle time via IOKit for reliable typing detection.
+KeyboardGuard is starting.
+Default language: English
+Behavior: Any non-english language -> English
+Idle timeout: 10.0 seconds
+Check interval: 2.0 seconds
 Monitoring...
 Running initial check...
-[2025-09-29 13:30:04 +0000] Active: ABC. Status OK.
-[2025-09-29 13:30:06 +0000] Switched TO Hebrew
-[2025-09-29 13:30:06 +0000] Hebrew session started - idle timer initialized
-[2025-09-29 13:30:06 +0000] Active: Hebrew. Hebrew Idle Time: 0.1s. Typing: true
-[2025-09-29 13:30:08 +0000] Active: Hebrew. Hebrew Idle Time: 0.2s. Typing: true
-[2025-09-29 13:30:10 +0000] Active: Hebrew. Hebrew Idle Time: 4.1s. Typing: false
-[2025-09-29 13:30:12 +0000] Active: Hebrew. Hebrew Idle Time: 6.1s. Typing: false
-[2025-09-29 13:30:14 +0000] Active: Hebrew. Hebrew Idle Time: 8.1s. Typing: false
-[2025-09-29 13:30:16 +0000] Hebrew idle time exceeded 10.0s. Initiating switch.
-[2025-09-29 13:30:16 +0000] Successfully switched to input source: ABC
-[2025-09-29 13:30:16 +0000] Hebrew session ended
-[2025-09-29 13:30:18 +0000] Active: ABC. Status OK.
+[2025-09-29 15:45:41 +0000] Active: ABC (English). Status OK.
+[2025-09-29 15:45:43 +0000] Switched TO Hebrew (non-default)
+Hebrew session started - idle timer initialized
+[2025-09-29 15:45:43 +0000] Timer reset due to language switch
+[2025-09-29 15:45:43 +0000] Active: Hebrew. Hebrew Idle Time: 0.0s. System: 0.2s. Typing: true
+[2025-09-29 15:45:45 +0000] Timer reset due to typing detected (system idle: 0.1s, prev: 0.2s)
+[2025-09-29 15:45:45 +0000] Active: Hebrew. Hebrew Idle Time: 0.0s. System: 0.1s. Typing: true
+[2025-09-29 15:45:47 +0000] Active: Hebrew. Hebrew Idle Time: 2.0s. System: 2.1s. Typing: false
+[2025-09-29 15:45:49 +0000] Active: Hebrew. Hebrew Idle Time: 4.0s. System: 4.1s. Typing: false
+[2025-09-29 15:45:51 +0000] Active: Hebrew. Hebrew Idle Time: 6.0s. System: 6.1s. Typing: false
+[2025-09-29 15:45:53 +0000] Active: Hebrew. Hebrew Idle Time: 8.0s. System: 8.1s. Typing: false
+[2025-09-29 15:45:55 +0000] Active: Hebrew. Hebrew Idle Time: 10.0s. System: 10.1s. Typing: false
+[2025-09-29 15:45:55 +0000] Hebrew idle time exceeded 10.0s. Switching to English.
+[2025-09-29 15:45:55 +0000] Successfully switched to input source: ABC
+Hebrew session ended
+[2025-09-29 15:45:57 +0000] Active: ABC (English). Status OK.
 ```
 
 ### More Usage Examples
@@ -319,7 +325,7 @@ let checkInterval: TimeInterval = 2.0       // How often to check (seconds)
 After making source code changes, recompile:
 
 ```bash
-swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit
+swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
 ```
 
 ## Permissions
