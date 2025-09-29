@@ -11,15 +11,20 @@ KeyboardGuard monitors your keyboard activity and automatically switches from He
 - 🎯 **Keyboard-only tracking**: Only keyboard activity affects the idle timer (mouse movement is ignored)
 - ⌨️ **Hebrew → English switching**: Specifically monitors Hebrew layout and switches to ABC layout
 - ⏱️ **Configurable timeout**: Set how long to wait before switching (default: 10 seconds)
-- 📊 **Real-time monitoring**: Shows current keyboard layout and idle time every 2 seconds
+- 🚫 **No typing interruption**: Never switches in the middle of active Hebrew typing
+- 📊 **Real-time monitoring**: Shows Hebrew session status, idle time, and typing activity
 - 🔄 **Global monitoring**: Works regardless of which app has focus
+- 🎛️ **Smart session management**: Separate timers for each Hebrew session
+- 🛠️ **Status checking**: Built-in tools to monitor background processes
 
 ### How it works
 
-1. Monitors when Hebrew keyboard layout (`com.apple.keylayout.Hebrew`) is active
-2. Tracks time since last keyboard input (ignores mouse movement)
-3. When keyboard idle time exceeds the configured timeout, automatically switches to ABC layout
-4. Logs all activity with timestamps for monitoring
+1. **Monitors keyboard activity globally** - Tracks when any keyboard input occurs (ignores mouse movement)
+2. **Detects Hebrew sessions** - When you switch TO Hebrew, starts a dedicated Hebrew idle timer
+3. **Smart idle tracking** - Only counts idle time when Hebrew is active AND you stop typing
+4. **Prevents typing interruption** - Continuous typing in Hebrew resets the timer, no mid-sentence switching
+5. **Automatic switching** - After configured timeout of Hebrew inactivity, switches back to ABC layout
+6. **Session management** - Properly handles multiple Hebrew sessions with independent timers
 
 ## Requirements
 
@@ -72,6 +77,7 @@ This creates an executable file named `KeyboardGuard`.
 ### Sample Output
 
 ```
+Keyboard activity monitor initialized...
 Keyboard Guard is starting.
 Targeted language for switch: com.apple.keylayout.Hebrew
 Default language: com.apple.keylayout.ABC
@@ -79,15 +85,18 @@ Idle timeout set to: 10.0 seconds.
 Check interval: 2.0 seconds.
 Monitoring...
 Running initial check...
-[2025-09-29 12:42:50 +0000] Active: Hebrew. Keyboard Idle Time: 0s.
-[2025-09-29 12:42:52 +0000] Active: Hebrew. Keyboard Idle Time: 2s.
-[2025-09-29 12:42:54 +0000] Active: Hebrew. Keyboard Idle Time: 4s.
-[2025-09-29 12:42:56 +0000] Active: Hebrew. Keyboard Idle Time: 6s.
-[2025-09-29 12:42:58 +0000] Active: Hebrew. Keyboard Idle Time: 8s.
-[2025-09-29 12:43:00 +0000] Active: Hebrew. Keyboard Idle Time: 10s.
-[2025-09-29 12:43:00 +0000] Idle time exceeded 10.0s. Initiating switch.
-[2025-09-29 12:43:00 +0000] Successfully switched to input source: ABC
-[2025-09-29 12:43:02 +0000] Active: ABC. Status OK.
+[2025-09-29 13:30:04 +0000] Active: ABC. Status OK.
+[2025-09-29 13:30:06 +0000] Switched TO Hebrew
+[2025-09-29 13:30:06 +0000] Hebrew session started - idle timer initialized
+[2025-09-29 13:30:06 +0000] Active: Hebrew. Hebrew Idle Time: 0.1s. Typing: true
+[2025-09-29 13:30:08 +0000] Active: Hebrew. Hebrew Idle Time: 0.2s. Typing: true
+[2025-09-29 13:30:10 +0000] Active: Hebrew. Hebrew Idle Time: 4.1s. Typing: false
+[2025-09-29 13:30:12 +0000] Active: Hebrew. Hebrew Idle Time: 6.1s. Typing: false
+[2025-09-29 13:30:14 +0000] Active: Hebrew. Hebrew Idle Time: 8.1s. Typing: false
+[2025-09-29 13:30:16 +0000] Hebrew idle time exceeded 10.0s. Initiating switch.
+[2025-09-29 13:30:16 +0000] Successfully switched to input source: ABC
+[2025-09-29 13:30:16 +0000] Hebrew session ended
+[2025-09-29 13:30:18 +0000] Active: ABC. Status OK.
 ```
 
 ### More Usage Examples
@@ -119,6 +128,55 @@ To stop the background process:
 
 ```bash
 pkill KeyboardGuard
+```
+
+### Checking for Background Processes
+
+To verify if KeyboardGuard is running in the background:
+
+```bash
+# Quick check for running processes
+pgrep -f KeyboardGuard
+
+# Detailed process information
+ps aux | grep KeyboardGuard | grep -v grep
+
+# Use the comprehensive status checker (included with project)
+./check_status.sh
+```
+
+**Status Checker Script:**
+The project includes a `check_status.sh` script that provides a comprehensive overview:
+
+```bash
+=== KeyboardGuard Status Check ===
+
+1. Checking for running processes...
+   ✅ No KeyboardGuard processes found
+
+2. Checking LaunchAgent status...
+   ✅ No KeyboardGuard LaunchAgent loaded
+
+3. Checking for log files...
+   ✅ No log files found
+
+4. Checking LaunchAgent file...
+   ✅ No LaunchAgent file found
+
+=== Status Check Complete ===
+```
+
+**Stop all instances:**
+```bash
+# Kill all running processes
+pkill KeyboardGuard
+
+# Stop LaunchAgent (if running)
+launchctl stop com.user.keyboardguard
+launchctl unload ~/Library/LaunchAgents/com.user.keyboardguard.plist
+
+# Verify everything is stopped
+./check_status.sh
 ```
 
 ## Auto-Start on Login
@@ -278,6 +336,28 @@ This means the specified keyboard layout isn't enabled. To fix:
 
 - Make sure you have the required permissions (see Permissions section above)
 - Try running with explicit output: `./KeyboardGuard 2>&1`
+- Check if multiple instances are running: `./check_status.sh`
+
+### Understanding the logs
+
+KeyboardGuard provides detailed logging to help you understand its behavior:
+
+- **`Switched TO Hebrew`** - Detected language change to Hebrew, timer starts fresh
+- **`Hebrew session started`** - New Hebrew idle timer initialized  
+- **`Hebrew Idle Time: X.Xs. Typing: true/false`** - Shows idle time and current typing status
+- **`Typing: true`** - User is actively typing (keystroke within last second)
+- **`Typing: false`** - User has stopped typing, idle timer is counting up
+- **`Hebrew idle time exceeded`** - Timeout reached, switching back to English
+- **`Hebrew session ended`** - Hebrew session closed, timer stopped
+
+### Switching happens during typing
+
+If switching still occurs during active typing:
+
+1. Check the logs show `Typing: false` when switching occurs
+2. Verify Hebrew keyboard layout is properly detected
+3. Increase timeout value: `./KeyboardGuard 30` (30 seconds)
+4. Ensure no multiple instances are running: `./check_status.sh`
 
 ### Finding available keyboard layouts
 
