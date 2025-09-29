@@ -1,37 +1,39 @@
 # KeyboardGuard
 
-A macOS utility that automatically switches your keyboard layout from Hebrew back to English when you stop typing for a specified period.
+A universal macOS utility that automatically switches from any non-default keyboard layout back to your preferred default language when you stop typing for a specified period.
 
 ## What it does
 
-KeyboardGuard monitors your keyboard activity and automatically switches from Hebrew keyboard layout back to English (ABC) when you haven't typed anything for a configurable amount of time. This prevents you from accidentally typing Hebrew characters when you meant to type in English.
+KeyboardGuard monitors your keyboard activity and automatically switches from ANY non-default keyboard layout back to your chosen default language when you haven't typed anything for a configurable amount of time. This prevents you from accidentally typing in the wrong language when you meant to type in your preferred language.
 
 ### Key Features
 
 - 🎯 **Keyboard-only tracking**: Only keyboard activity affects the idle timer (mouse movement is ignored)
-- ⌨️ **Hebrew → English switching**: Specifically monitors Hebrew layout and switches to ABC layout
+- 🌍 **Universal language support**: Works with 30+ languages as your default language
 - ⏱️ **Configurable timeout**: Set how long to wait before switching (default: 10 seconds)
-- 🚫 **No typing interruption**: Never switches in the middle of active Hebrew typing
-- 📊 **Real-time monitoring**: Shows Hebrew session status, idle time, and typing activity
+- 🚫 **No typing interruption**: Never switches in the middle of active typing
+- 📊 **Real-time monitoring**: Shows current language, idle time, and typing activity
 - 🔄 **Global monitoring**: Works regardless of which app has focus
-- 🎛️ **Smart session management**: Separate timers for each Hebrew session
+- ✅ **Language validation**: Automatically checks if languages are enabled on your system
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
 
 ### How it works
 
 1. **Monitors keyboard activity globally** - Tracks when any keyboard input occurs (ignores mouse movement)
-2. **Detects Hebrew sessions** - When you switch TO Hebrew, starts a dedicated Hebrew idle timer
-3. **Smart idle tracking** - Only counts idle time when Hebrew is active AND you stop typing
-4. **Prevents typing interruption** - Continuous typing in Hebrew resets the timer, no mid-sentence switching
-5. **Automatic switching** - After configured timeout of Hebrew inactivity, switches back to ABC layout
-6. **Session management** - Properly handles multiple Hebrew sessions with independent timers
+2. **Universal language detection** - Any language that is NOT your default triggers the idle timer
+3. **Smart idle tracking** - Only counts idle time when in non-default language AND you stop typing
+4. **Prevents typing interruption** - Continuous typing resets the timer, no mid-sentence switching
+5. **Automatic switching** - After timeout in any non-default language, switches to your default language
+6. **Language validation** - Validates that your chosen default language is actually enabled on your system
 
 ## Requirements
 
 - macOS (tested on macOS Sonoma)
-- Hebrew keyboard layout enabled in System Preferences
-- ABC (English) keyboard layout enabled in System Preferences
+- At least one supported keyboard layout enabled in System Preferences
+- Your desired default language enabled in System Preferences
 - Xcode Command Line Tools (for Swift compiler)
+
+**Language Validation**: KeyboardGuard automatically detects which languages are available on your system and validates your selections. Use `./KeyboardGuard --help` to see available languages.
 
 ## Installation
 
@@ -70,9 +72,12 @@ This creates an executable file named `KeyboardGuard`.
 
 ### Command Line Options
 
-- **No arguments**: Uses default timeout of 10 seconds
-- **`timeout_seconds`**: Number of seconds to wait before switching (must be positive)
+- **No arguments**: Uses default timeout of 10 seconds and English as default language
+- **`-t SECONDS` or `--time SECONDS`**: Idle timeout in seconds (must be positive)
+- **`-l LANGUAGE` or `--language LANGUAGE`**: Default language to switch TO
 - **`-h` or `--help`**: Show help message with usage examples
+
+**Note**: Only languages enabled in your System Preferences will work. The program validates this automatically.
 
 ### Sample Output
 
@@ -102,13 +107,19 @@ Running initial check...
 ### More Usage Examples
 
 ```bash
-# Quick switching (5 seconds)
-./KeyboardGuard 5
+# Quick switching (5 seconds) - English default
+./KeyboardGuard -t 5
 
-# Patient switching (60 seconds)
-./KeyboardGuard 60
+# Patient switching (60 seconds) - English default  
+./KeyboardGuard -t 60
 
-# Check available options
+# Portuguese as default language
+./KeyboardGuard -l portuguese
+
+# Spanish with custom timeout
+./KeyboardGuard --language spanish --time 15
+
+# Check available options and see what languages are enabled
 ./KeyboardGuard --help
 ```
 
@@ -322,15 +333,27 @@ KeyboardGuard may request accessibility permissions to monitor keyboard events g
 
 ## Troubleshooting
 
-### "FATAL ERROR: The default input source ID could not be found"
+### Language not enabled error
 
-This means the specified keyboard layout isn't enabled. To fix:
+If you see an error like "Language 'portuguese' is not enabled on your system":
 
+**The program now validates languages automatically** and provides helpful guidance:
+
+```
+Error: Language 'portuguese' is not enabled on your system.
+Available languages on your system: english, hebrew
+
+To enable 'portuguese' keyboard layout:
+1. Go to System Preferences → Keyboard → Input Sources
+2. Click + to add 'portuguese' keyboard layout
+3. Run KeyboardGuard again
+```
+
+**To enable any keyboard layout:**
 1. Go to **System Preferences** → **Keyboard** → **Input Sources**
-2. Click **+** to add missing layouts:
-   - Hebrew (עברית)
-   - ABC (English)
-3. Ensure both layouts are enabled
+2. Click **+** to add the desired language
+3. Search for and add the keyboard layout
+4. Run KeyboardGuard again
 
 ### Program runs but no logs appear
 
