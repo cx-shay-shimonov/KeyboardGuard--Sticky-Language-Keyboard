@@ -19,6 +19,15 @@ swiftc KeyboardGuard.swift -o KeyboardGuard \
   -O \
   -whole-module-optimization
 
+# Sign the binary with ad-hoc signature to prevent Gatekeeper issues
+echo "🔏 Signing binary with ad-hoc signature..."
+if command -v codesign >/dev/null 2>&1; then
+    codesign --force --deep --sign - KeyboardGuard
+    echo "✅ Binary signed successfully"
+else
+    echo "⚠️  codesign not available, skipping signing"
+fi
+
 # Create release package
 echo "📋 Creating release package..."
 mkdir -p "${RELEASE_DIR}"
@@ -34,35 +43,9 @@ cp LICENSE "${RELEASE_DIR}/"
 chmod +x "${RELEASE_DIR}/KeyboardGuard"
 chmod +x "${RELEASE_DIR}/find_input_sources.swift"
 
-# Create installation script
-cat > "${RELEASE_DIR}/install.sh" << 'EOF'
-#!/bin/bash
-echo "🚀 KeyboardGuard Installation"
-echo "=============================="
-
-# Check if running on macOS
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "❌ This program only works on macOS"
-    exit 1
-fi
-
-# Make executable
-chmod +x KeyboardGuard find_input_sources.swift
-
-echo "✅ KeyboardGuard is ready to use!"
-echo ""
-echo "📖 Quick Start:"
-echo "  ./KeyboardGuard                    # Start with default settings"
-echo "  ./KeyboardGuard -l portuguese      # Use Portuguese as default"
-echo "  ./KeyboardGuard -t 30              # 30-second timeout"
-echo "  ./KeyboardGuard --help             # Show all options"
-echo ""
-echo "🔧 To add custom languages:"
-echo "  ./find_input_sources.swift         # Find input source IDs"
-echo "  edit languages.json                # Add your language"
-echo ""
-echo "📚 See README.md for full documentation"
-EOF
+# Copy the installation script (which handles code signing issues)
+echo "📄 Copying installation script..."
+cp install.sh "${RELEASE_DIR}/"
 
 chmod +x "${RELEASE_DIR}/install.sh"
 
