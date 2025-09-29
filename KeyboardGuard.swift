@@ -68,13 +68,14 @@ func selectInputSource(_ source: TISInputSource) {
 
 // MARK: - Keyboard Idle Time Utility
 
-/// Tracks keyboard-only idle time by monitoring keyboard events
-class KeyboardIdleTracker {
+/// Tracks when keyboard activity occurs (separate from Hebrew idle timing)
+class KeyboardActivityMonitor {
     private var lastKeyboardEventTime: Date = Date()
     private var eventMonitor: Any?
     
     init() {
         setupKeyboardMonitor()
+        print("Keyboard activity monitor initialized...")
     }
     
     deinit {
@@ -83,9 +84,9 @@ class KeyboardIdleTracker {
         }
     }
     
-    /// Sets up a global keyboard event monitor to track last keyboard activity
+    /// Sets up a global keyboard event monitor to track keyboard activity
     private func setupKeyboardMonitor() {
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] _ in
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             self?.lastKeyboardEventTime = Date()
         }
         
@@ -97,8 +98,44 @@ class KeyboardIdleTracker {
     }
     
     /// Gets the time since the last keyboard event in seconds
-    func getKeyboardIdleTime() -> TimeInterval {
+    func getTimeSinceLastKeyboardEvent() -> TimeInterval {
         return Date().timeIntervalSince(lastKeyboardEventTime)
+    }
+}
+
+/// Manages Hebrew-specific idle timing
+class HebrewIdleTimer {
+    private var hebrewStartTime: Date?
+    private var lastActivityInHebrew: Date?
+    
+    /// Call when switching TO Hebrew
+    func startHebrewSession() {
+        hebrewStartTime = Date()
+        lastActivityInHebrew = Date()
+        print("Hebrew session started - idle timer initialized")
+    }
+    
+    /// Call when there's keyboard activity while in Hebrew
+    func recordHebrewActivity() {
+        lastActivityInHebrew = Date()
+    }
+    
+    /// Get idle time since last activity in Hebrew (only valid if Hebrew session is active)
+    func getHebrewIdleTime() -> TimeInterval? {
+        guard let lastActivity = lastActivityInHebrew else { return nil }
+        return Date().timeIntervalSince(lastActivity)
+    }
+    
+    /// Stop Hebrew session (when switching away from Hebrew)
+    func stopHebrewSession() {
+        hebrewStartTime = nil
+        lastActivityInHebrew = nil
+        print("Hebrew session ended")
+    }
+    
+    /// Returns true if currently in a Hebrew session
+    func isInHebrewSession() -> Bool {
+        return hebrewStartTime != nil
     }
 }
 
@@ -107,10 +144,14 @@ class KeyboardIdleTracker {
 class KeyboardGuard {
     // Store a reference to the default source once to avoid repeated lookups.
     var defaultSource: TISInputSource?
-    // Keyboard idle time tracker
-    private let keyboardIdleTracker = KeyboardIdleTracker()
+    // Monitor keyboard activity globally
+    private let keyboardMonitor = KeyboardActivityMonitor()
+    // Manage Hebrew-specific idle timing
+    private let hebrewTimer = HebrewIdleTimer()
     // Configurable idle timeout
     private let idleTimeout: TimeInterval
+    // Track previous language to detect switches
+    private var previousLanguageID: String?
     
     init(idleTimeout: TimeInterval) {
         self.idleTimeout = idleTimeout
@@ -129,30 +170,58 @@ class KeyboardGuard {
     let nameProperty = currentInputSource != nil ? TISGetInputSourceProperty(currentInputSource!, kTISPropertyLocalizedName) : nil
     let currentName = nameProperty != nil ? Unmanaged<CFString>.fromOpaque(nameProperty!).takeUnretainedValue() as String : "Unknown"
 
-    // 1. Check if the current language is the one we want to police (Hebrew).
+    // Detect language changes
+    let switchedToHebrew = currentID == targetInputSourceID && previousLanguageID != targetInputSourceID
+    let switchedAwayFromHebrew = previousLanguageID == targetInputSourceID && currentID != targetInputSourceID
+    
+    // Get current keyboard activity status
+    let timeSinceLastKeyboard = keyboardMonitor.getTimeSinceLastKeyboardEvent()
+    let isCurrentlyTyping = timeSinceLastKeyboard < 1.0 // Consider "typing" if keystroke within 1 second
+    
+    // Handle Hebrew session management
+    if switchedToHebrew {
+        print("[\(Date())] Switched TO Hebrew")
+        hebrewTimer.startHebrewSession()
+    } else if switchedAwayFromHebrew {
+        hebrewTimer.stopHebrewSession()
+    }
+    
+    // Update previous language for next check
+    previousLanguageID = currentID
+
+    // Main logic
     if currentID == targetInputSourceID {
-        // We are currently in Hebrew. Now check keyboard idle time.
-        let keyboardIdleSeconds = keyboardIdleTracker.getKeyboardIdleTime()
-
-        print("[\(Date())] Active: \(currentName). Keyboard Idle Time: \(String(format: "%.0f", keyboardIdleSeconds))s.")
-
-        // 2. Check if the keyboard has been idle long enough.
-        if keyboardIdleSeconds >= idleTimeout {
-            print("[\(Date())] Idle time exceeded \(idleTimeout)s. Initiating switch.")
-
-            guard let sourceToSwitchTo = defaultSource else {
-                print("[\(Date())] Error: Default input source ('\(defaultInputSourceID)') not found.")
-                return
+        // Currently in Hebrew
+        
+        // Record activity if user is currently typing
+        if isCurrentlyTyping {
+            hebrewTimer.recordHebrewActivity()
+        }
+        
+        // Get Hebrew idle time
+        if let hebrewIdleTime = hebrewTimer.getHebrewIdleTime() {
+            print("[\(Date())] Active: \(currentName). Hebrew Idle Time: \(String(format: "%.1f", hebrewIdleTime))s. Typing: \(isCurrentlyTyping)")
+            
+            // Switch if idle long enough
+            if hebrewIdleTime >= idleTimeout {
+                print("[\(Date())] Hebrew idle time exceeded \(idleTimeout)s. Initiating switch.")
+                
+                guard let sourceToSwitchTo = defaultSource else {
+                    print("[\(Date())] Error: Default input source ('\(defaultInputSourceID)') not found.")
+                    return
+                }
+                
+                selectInputSource(sourceToSwitchTo)
+                hebrewTimer.stopHebrewSession()
             }
-
-            // 3. Perform the switch.
-            selectInputSource(sourceToSwitchTo)
+        } else {
+            print("[\(Date())] Active: \(currentName). Hebrew session not initialized.")
         }
     } else if currentID != defaultInputSourceID {
-        // Optional: Log when a *different* non-default language is active, but do nothing.
+        // Different non-default language
         print("[\(Date())] Active: \(currentName). Monitoring only Hebrew for auto-switch.")
     } else {
-        // We are already in the default language (English).
+        // Default language (English)
         print("[\(Date())] Active: \(currentName). Status OK.")
     }
     
