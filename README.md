@@ -33,31 +33,56 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - macOS (tested on macOS Sonoma)
 - At least one supported keyboard layout enabled in System Preferences
 - Your desired default language enabled in System Preferences
-- Xcode Command Line Tools (for Swift compiler)
+- Xcode Command Line Tools (only needed if compiling from source)
 
 **Language Validation**: KeyboardGuard automatically detects which languages are available on your system and validates your selections. Use `./KeyboardGuard --help` to see available languages.
 
 **Configuration File**: KeyboardGuard uses a `languages.json` file to define supported languages and default settings. If the file doesn't exist, it will be created automatically with default values.
 
+**Releases**: Pre-compiled binaries are available on the [Releases page](https://github.com/cx-shay-shimonov/KeyboardGuard--Sticky-Language-Keyboard/releases) for easy installation without compilation.
+
 ## Installation
 
-### 1. Install Xcode Command Line Tools
+### Option A: Download Pre-compiled Release (Recommended) 📦
 
-```bash
-xcode-select --install
-```
+1. **Download the latest release**:
+   - Go to [Releases](https://github.com/cx-shay-shimonov/KeyboardGuard--Sticky-Language-Keyboard/releases)
+   - Download `KeyboardGuard-macOS.tar.gz`
 
-### 2. Clone or Download
+2. **Extract and install**:
+   ```bash
+   tar -xzf KeyboardGuard-macOS.tar.gz
+   cd KeyboardGuard-*/
+   ./install.sh
+   ```
 
-Download the `KeyboardGuard.swift` file to your desired directory.
+3. **Run KeyboardGuard**:
+   ```bash
+   ./KeyboardGuard                    # Start with default settings
+   ./KeyboardGuard --help             # Show all options
+   ```
 
-### 3. Compile
+**✅ Benefits**: No compilation needed, includes all dependencies, ready to use immediately.
 
-```bash
-swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
-```
+### Option B: Compile from Source 🔨
 
-This creates an executable file named `KeyboardGuard`.
+1. **Install Xcode Command Line Tools**:
+   ```bash
+   xcode-select --install
+   ```
+
+2. **Clone the repository**:
+   ```bash
+   git clone https://github.com/cx-shay-shimonov/KeyboardGuard--Sticky-Language-Keyboard.git
+   cd KeyboardGuard--Sticky-Language-Keyboard
+   ```
+
+3. **Compile**:
+   ```bash
+   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
+   ```
+
+**✅ Benefits**: Latest development version, ability to modify source code.
 
 ## Configuration
 
@@ -183,6 +208,20 @@ Hebrew session ended
 
 # Check available options and see what languages are enabled
 ./KeyboardGuard --help
+```
+
+### Updating KeyboardGuard
+
+**From Release (Recommended)**:
+1. Download the latest release from the [Releases page](https://github.com/cx-shay-shimonov/KeyboardGuard--Sticky-Language-Keyboard/releases)
+2. Stop any running KeyboardGuard processes: `pkill -f KeyboardGuard`
+3. Replace your existing installation with the new version
+4. Your `languages.json` configuration will be preserved
+
+**From Source**:
+```bash
+git pull origin main
+swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
 ```
 
 ### Running in Background
