@@ -121,6 +121,106 @@ To stop the background process:
 pkill KeyboardGuard
 ```
 
+## Auto-Start on Login
+
+To have KeyboardGuard automatically start when you log into macOS, you have several options:
+
+### Option 1: LaunchAgent (Recommended)
+
+This is the most reliable method that integrates properly with macOS.
+
+1. **Create the LaunchAgent file:**
+
+```bash
+mkdir -p ~/Library/LaunchAgents
+```
+
+2. **Create the plist file** at `~/Library/LaunchAgents/com.user.keyboardguard.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.keyboardguard</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USERNAME/Projects/KeyboardGuard/KeyboardGuard</string>
+        <string>10</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/Projects/KeyboardGuard/keyboardguard.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/Projects/KeyboardGuard/keyboardguard.log</string>
+</dict>
+</plist>
+```
+
+**Important:** Replace `YOUR_USERNAME` with your actual username and adjust the path to match where you compiled KeyboardGuard.
+
+3. **Load the LaunchAgent:**
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.user.keyboardguard.plist
+```
+
+4. **Manage the service:**
+
+```bash
+# Start manually
+launchctl start com.user.keyboardguard
+
+# Stop manually  
+launchctl stop com.user.keyboardguard
+
+# Disable auto-start
+launchctl unload ~/Library/LaunchAgents/com.user.keyboardguard.plist
+```
+
+### Option 2: Login Items (Simple)
+
+1. Go to **System Preferences** → **Users & Groups**
+2. Select your user account
+3. Click **Login Items** tab
+4. Click **+** and browse to your `KeyboardGuard` executable
+5. Optionally check "Hide" to run without showing a terminal window
+
+**Note:** This method will show a terminal window unless hidden, and you can't easily pass command-line arguments.
+
+### Option 3: Shell Profile (Terminal Users)
+
+Add this to your `~/.zshrc` file:
+
+```bash
+# Auto-start KeyboardGuard if not already running
+if ! pgrep -f "KeyboardGuard" > /dev/null; then
+    nohup /Users/YOUR_USERNAME/Projects/KeyboardGuard/KeyboardGuard 10 > /tmp/keyboardguard.log 2>&1 &
+fi
+```
+
+This will start KeyboardGuard whenever you open a terminal (if it's not already running).
+
+### Customizing Auto-Start
+
+**Change timeout for auto-start:**
+In the LaunchAgent plist, modify the `ProgramArguments` section:
+
+```xml
+<key>ProgramArguments</key>
+<array>
+    <string>/Users/YOUR_USERNAME/Projects/KeyboardGuard/KeyboardGuard</string>
+    <string>30</string>  <!-- Change this to your desired timeout -->
+</array>
+```
+
+**Change log location:**
+Modify the `StandardOutPath` and `StandardErrorPath` in the plist file.
+
 ## Configuration
 
 ### Runtime Configuration (Recommended)
