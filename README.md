@@ -645,9 +645,18 @@ If you don't hear sound effects when language switching occurs:
 If you don't see visual toast notifications when language switching occurs:
 
 1. **Check if visual notifications are enabled**: Look for "Visual notifications: enabled (toast)" in startup message
-2. **Test with a quick timeout**: Run `./KeyboardGuard -t 3` for faster testing
-3. **Disable if not needed**: Use `--novisual` to disable toast notifications
-4. **Verify compilation**: Make sure you compiled with `-framework Cocoa`
+2. **Look in the right place**: Toast appears in **top-right corner** of screen, not in Notification Center
+3. **Test with a quick timeout**: Run `./KeyboardGuard -t 3` for faster testing
+4. **Check window permissions**: Some security software may block floating windows
+5. **Verify compilation**: Make sure you compiled with `-framework Cocoa`
+6. **Disable if not needed**: Use `--novisual` to disable toast notifications
+
+**Toast Notification Details:**
+- **Location**: Top-right corner of screen (20px margin from edges)
+- **Appearance**: Rounded rectangle with shadow and semi-transparent background
+- **Content**: "🔄 [From Language] → [To Language]" (e.g., "🔄 Hebrew → English")
+- **Duration**: Appears for 2 seconds with fade-in/fade-out animations
+- **Behavior**: Ignores mouse events, floats above all windows
 5. **Check screen position**: Toast appears in top-right corner of main screen
 
 ### Understanding the logs

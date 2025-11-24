@@ -156,25 +156,36 @@ func playFailureSound() {
 // MARK: - Visual Toast Notifications
 
 /// Shows a brief toast notification when language switches back to default
+/// 
+/// This function creates a custom NSWindow-based toast notification that appears
+/// in the top-right corner of the screen. Unlike native macOS notifications,
+/// this toast doesn't require notification permissions and provides immediate
+/// visual feedback without interfering with the main application run loop.
+///
 /// - Parameters:
-///   - fromLanguage: The language we switched from
-///   - toLanguage: The default language we switched to
+///   - fromLanguage: The language we switched from (e.g., "hebrew")
+///   - toLanguage: The default language we switched to (e.g., "english")
+///
+/// - Note: Uses DispatchQueue.main.async to ensure UI updates happen on main thread
+/// - Note: NSApplication.shared must be initialized for proper window display
+/// - Note: Toast auto-closes after 2 seconds with fade animation
 func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
     DispatchQueue.main.async {
-        // Create a small overlay window for the toast
+        // Create a borderless window for the toast overlay
+        // Size: 300x80 provides enough space for language names
         let toastWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
+            styleMask: [.borderless], // No title bar or window controls
+            backing: .buffered,       // Double-buffered for smooth animations
+            defer: false             // Create window immediately
         )
         
-        // Configure window properties
-        toastWindow.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95)
-        toastWindow.level = .floating
-        toastWindow.isOpaque = false
-        toastWindow.hasShadow = true
-        toastWindow.ignoresMouseEvents = true
+        // Configure window properties for toast appearance
+        toastWindow.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95) // Semi-transparent background
+        toastWindow.level = .floating           // Appear above all other windows
+        toastWindow.isOpaque = false           // Allow transparency effects
+        toastWindow.hasShadow = true           // Add subtle shadow for depth
+        toastWindow.ignoresMouseEvents = true  // Don't interfere with user interaction
         
         // Create content view
         let contentView = NSView(frame: toastWindow.contentRect(forFrameRect: toastWindow.frame))
@@ -203,11 +214,12 @@ func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
         ])
         
         // Position the window at the top-right of the screen
+        // Uses visibleFrame to avoid menu bar and dock areas
         if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
+            let screenFrame = screen.visibleFrame  // Excludes menu bar and dock
             let windowFrame = toastWindow.frame
-            let x = screenFrame.maxX - windowFrame.width - 20
-            let y = screenFrame.maxY - windowFrame.height - 20
+            let x = screenFrame.maxX - windowFrame.width - 20   // 20px margin from right edge
+            let y = screenFrame.maxY - windowFrame.height - 20  // 20px margin from top edge
             toastWindow.setFrameOrigin(NSPoint(x: x, y: y))
         }
         
@@ -226,13 +238,14 @@ func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
             toastWindow.animator().alphaValue = 1.0
         }
         
-        // Auto-close after 2 seconds
+        // Auto-close after 2 seconds with fade-out animation
+        // This ensures the toast doesn't stay on screen too long
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
+                context.duration = 0.3  // 300ms fade-out animation
                 toastWindow.animator().alphaValue = 0.0
             } completionHandler: {
-                toastWindow.close()
+                toastWindow.close()     // Clean up window resources
             }
         }
     }
@@ -941,6 +954,14 @@ func setupDaemonMode() {
 // MARK: - Program Entry
 
 let cmdConfig = parseCommandLineArguments()
+
+// Initialize NSApplication for toast notifications, but don't interfere with main run loop
+// This is required for NSWindow-based toast notifications to display properly
+if cmdConfig.visualEnabled && !cmdConfig.daemonMode {
+    // Initialize NSApplication but don't call run() - let RunLoop.current.run() handle it
+    _ = NSApplication.shared
+    NSApplication.shared.setActivationPolicy(.accessory) // Run as accessory app (no dock icon)
+}
 
 // Handle daemon mode before creating KeyboardGuard instance
 if cmdConfig.daemonMode {
