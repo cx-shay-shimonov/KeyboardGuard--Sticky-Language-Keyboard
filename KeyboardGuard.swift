@@ -336,14 +336,63 @@ func selectInputSource(_ source: TISInputSource) {
 
 // MARK: - System Idle Time Utility
 
-/// Gets system idle time using IOKit HIDIdleTime - more reliable than AppKit events
-class SystemIdleTimeMonitor {
+/// Idle detection modes
+enum IdleMode: String, CaseIterable {
+    case keyboard = "keyboard"  // Only keyboard activity resets timer
+    case mouse = "mouse"       // Only mouse activity resets timer  
+    case system = "system"     // Both keyboard and mouse activity reset timer (default)
     
-    init() {
-        print("System idle time monitor initialized...")
+    var description: String {
+        switch self {
+        case .keyboard: return "keyboard-only"
+        case .mouse: return "mouse-only"
+        case .system: return "system (keyboard + mouse)"
+        }
+    }
+}
+
+/// Enhanced idle time monitor that can distinguish between keyboard, mouse, and system idle time
+class EnhancedIdleTimeMonitor {
+    private var lastKeyboardActivity: Date = Date()
+    private var lastMouseActivity: Date = Date()
+    private let idleMode: IdleMode
+    
+    init(mode: IdleMode = .system) {
+        self.idleMode = mode
+        
+        switch mode {
+        case .keyboard:
+            print("Keyboard-only idle time monitor initialized...")
+            setupKeyboardMonitoring()
+        case .mouse:
+            print("Mouse-only idle time monitor initialized...")
+            setupMouseMonitoring()
+        case .system:
+            print("System idle time monitor initialized...")
+            // Use both keyboard and mouse monitoring for most accurate system tracking
+            setupKeyboardMonitoring()
+            setupMouseMonitoring()
+        }
     }
     
-    /// Gets the system idle time in seconds using IOKit
+    /// Gets the appropriate idle time based on the configured mode
+    func getIdleTime() -> TimeInterval {
+        let now = Date()
+        
+        switch idleMode {
+        case .keyboard:
+            return now.timeIntervalSince(lastKeyboardActivity)
+        case .mouse:
+            return now.timeIntervalSince(lastMouseActivity)
+        case .system:
+            // System idle time is the minimum of keyboard and mouse idle times
+            let keyboardIdle = now.timeIntervalSince(lastKeyboardActivity)
+            let mouseIdle = now.timeIntervalSince(lastMouseActivity)
+            return min(keyboardIdle, mouseIdle)
+        }
+    }
+    
+    /// Gets the legacy system idle time using IOKit (for comparison/fallback)
     func getSystemIdleTime() -> TimeInterval {
         var iterator: io_iterator_t = 0
         let result = IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"), &iterator)
@@ -386,6 +435,65 @@ class SystemIdleTimeMonitor {
         
         // Convert from nanoseconds to seconds
         return Double(idleTimeValue) / 1_000_000_000.0
+    }
+    
+    /// Sets up keyboard event monitoring
+    private func setupKeyboardMonitoring() {
+        let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                // Update keyboard activity timestamp
+                if let monitor = Unmanaged<EnhancedIdleTimeMonitor>.fromOpaque(refcon!).takeUnretainedValue() as EnhancedIdleTimeMonitor? {
+                    monitor.lastKeyboardActivity = Date()
+                }
+                return Unmanaged.passRetained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            print("Warning: Could not create keyboard event tap. Falling back to system idle time.")
+            return
+        }
+        
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+    }
+    
+    /// Sets up mouse event monitoring
+    private func setupMouseMonitoring() {
+        let eventMask = (1 << CGEventType.mouseMoved.rawValue) | 
+                       (1 << CGEventType.leftMouseDown.rawValue) | 
+                       (1 << CGEventType.leftMouseUp.rawValue) |
+                       (1 << CGEventType.rightMouseDown.rawValue) | 
+                       (1 << CGEventType.rightMouseUp.rawValue) |
+                       (1 << CGEventType.scrollWheel.rawValue)
+        
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                // Update mouse activity timestamp
+                if let monitor = Unmanaged<EnhancedIdleTimeMonitor>.fromOpaque(refcon!).takeUnretainedValue() as EnhancedIdleTimeMonitor? {
+                    monitor.lastMouseActivity = Date()
+                }
+                return Unmanaged.passRetained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            print("Warning: Could not create mouse event tap. Falling back to system idle time.")
+            return
+        }
+        
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
     }
 }
 
@@ -440,8 +548,8 @@ class NonDefaultLanguageTimer {
 class KeyboardGuard {
     // Store a reference to the default source once to avoid repeated lookups.
     var defaultSource: TISInputSource?
-    // Monitor system idle time
-    private let systemIdleMonitor = SystemIdleTimeMonitor()
+    // Monitor idle time with configurable mode
+    private let idleTimeMonitor: EnhancedIdleTimeMonitor
     // Manage non-default language-specific idle timing
     private let nonDefaultLanguageTimer = NonDefaultLanguageTimer()
     // Configurable idle timeout
@@ -460,12 +568,13 @@ class KeyboardGuard {
     // Track previous global idle time to detect typing
     private var previousGlobalIdleTime: TimeInterval = 0
     
-    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true, daemonMode: Bool = false) {
+    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true, daemonMode: Bool = false, idleMode: IdleMode = .system) {
         self.idleTimeout = idleTimeout
         self.defaultLanguageName = defaultLanguage
         self.soundEnabled = soundEnabled
         self.visualEnabled = visualEnabled
         self.daemonMode = daemonMode
+        self.idleTimeMonitor = EnhancedIdleTimeMonitor(mode: idleMode)
         
         // Get the default input source ID from the language mapping
         if let inputSourceID = supportedLanguages[defaultLanguage.lowercased()] {
@@ -479,7 +588,7 @@ class KeyboardGuard {
         defaultSource = findInputSource(by: defaultInputSourceID)
         
         if !daemonMode {
-            print("Note: Using system idle time via IOKit for reliable typing detection.")
+            print("Note: Using \(idleMode.description) idle detection for precise activity tracking.")
         }
     }
     
@@ -529,9 +638,9 @@ class KeyboardGuard {
     let switchedToNonDefault = !isCurrentlyDefault && wasDefaultPreviously
     let switchedToDefault = isCurrentlyDefault && !wasDefaultPreviously
     
-    // Get current system idle time
-    let systemIdleTime = systemIdleMonitor.getSystemIdleTime()
-    let isCurrentlyTyping = systemIdleTime < 1.0 // Consider "typing" if system idle < 1 second
+    // Get current idle time based on configured mode
+    let currentIdleTime = idleTimeMonitor.getIdleTime()
+    let isCurrentlyTyping = currentIdleTime < 1.0 // Consider "typing" if idle < 1 second
     
     // Handle non-default language session management
     if switchedToNonDefault {
@@ -568,20 +677,20 @@ class KeyboardGuard {
             nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
         }
         
-        // Detect typing by checking if system idle time decreased or is very small
-        let typingDetected = systemIdleTime < previousGlobalIdleTime || systemIdleTime < 0.5
+        // Detect typing by checking if idle time decreased or is very small
+        let typingDetected = currentIdleTime < previousGlobalIdleTime || currentIdleTime < 0.5
         
         if typingDetected && nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
             nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
-            print("[\(Date())] Timer reset due to typing detected (system idle: \(String(format: "%.1f", systemIdleTime))s, prev: \(String(format: "%.1f", previousGlobalIdleTime))s)")
+            print("[\(Date())] Timer reset due to typing detected (idle: \(String(format: "%.1f", currentIdleTime))s, prev: \(String(format: "%.1f", previousGlobalIdleTime))s)")
         }
         
         // Update previous idle time for next comparison
-        previousGlobalIdleTime = systemIdleTime
+        previousGlobalIdleTime = currentIdleTime
         
         // Use secondary language timer for switching decision
         if let secondaryIdleTime = nonDefaultLanguageTimer.getNonDefaultLanguageIdleTime() {
-            log("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. System: \(String(format: "%.1f", systemIdleTime))s. Typing: \(isCurrentlyTyping)")
+            log("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. Current: \(String(format: "%.1f", currentIdleTime))s. Typing: \(isCurrentlyTyping)")
             
             // Switch based on secondary language idle time
             if secondaryIdleTime >= idleTimeout {
@@ -633,6 +742,7 @@ struct ProgramConfig {
     let soundEnabled: Bool
     let visualEnabled: Bool
     let daemonMode: Bool
+    let idleMode: IdleMode
 }
 
 func parseCommandLineArguments() -> ProgramConfig {
@@ -642,6 +752,7 @@ func parseCommandLineArguments() -> ProgramConfig {
     let soundEnabled = !arguments.contains("--nosound") // Default is true unless --nosound is provided
     let visualEnabled = !arguments.contains("--novisual") // Default is true unless --novisual is provided
     let daemonMode = arguments.contains("--daemon") || arguments.contains("-d") // Default is false unless --daemon is provided
+    var idleMode: IdleMode = .system // Default to system mode (keyboard + mouse)
     
     // Check for help flag
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -713,6 +824,22 @@ func parseCommandLineArguments() -> ProgramConfig {
             // --daemon flag is already handled above, just skip it here
             break
             
+        case "--idle-mode":
+            // Get idle mode value
+            if i + 1 < arguments.count {
+                i += 1
+                let modeString = arguments[i].lowercased()
+                if let mode = IdleMode(rawValue: modeString) {
+                    idleMode = mode
+                } else {
+                    print("Error: Invalid idle mode '\(arguments[i])'. Valid options: keyboard, mouse, system")
+                    print("Using default: system")
+                }
+            } else {
+                print("Error: --idle-mode requires a mode (keyboard, mouse, system).")
+                print("Using default: system")
+            }
+            
         default:
             // Try to parse as timeout (backward compatibility)
             if let timeoutValue = TimeInterval(arg), timeoutValue > 0 {
@@ -737,7 +864,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         exit(1)
     }
     
-    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled, daemonMode: daemonMode)
+    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled, daemonMode: daemonMode, idleMode: idleMode)
 }
 
 func showHelp() {
@@ -754,6 +881,7 @@ func showHelp() {
     print("  --nosound              Disable sound effects (default: sound enabled)")
     print("  --novisual             Disable toast notifications (default: visual enabled)")
     print("  -d, --daemon           Run in background daemon mode (no terminal output)")
+    print("  --idle-mode MODE       Idle detection mode: keyboard, mouse, system (default: system)")
     print("  -h, --help            Show this help message")
     print("")
     print("How it works:")
@@ -781,13 +909,14 @@ func showHelp() {
     }
     print("\n")
     print("Examples:")
-    print("  KeyboardGuard                          # Any non-English -> English, 10s timeout")
-    print("  KeyboardGuard -l portuguese            # Any non-Portuguese -> Portuguese, 10s timeout")
-    print("  KeyboardGuard -t 30                    # Any non-English -> English, 30s timeout")
+    print("  KeyboardGuard                          # System idle detection (keyboard + mouse), 10s timeout")
+    print("  KeyboardGuard -l portuguese            # Any non-Portuguese -> Portuguese")
+    print("  KeyboardGuard -t 30                    # 30s timeout with system idle detection")
+    print("  KeyboardGuard --idle-mode keyboard     # Keyboard-only idle detection")
+    print("  KeyboardGuard --idle-mode mouse        # Mouse-only idle detection")
     print("  KeyboardGuard --daemon                 # Run in background daemon mode")
-    print("  KeyboardGuard --daemon -l spanish -t 15  # Daemon mode with custom settings")
+    print("  KeyboardGuard --daemon --idle-mode keyboard -t 15  # Keyboard-only daemon mode")
     print("  KeyboardGuard --nosound --novisual     # Silent mode (no audio/visual feedback)")
-    print("  KeyboardGuard --language french --time 45  # Any non-French -> French, 45s timeout")
     print("")
     print("Backward Compatibility:")
     print("  KeyboardGuard 30                       # Any non-English -> English, 30s timeout")
@@ -819,7 +948,7 @@ if cmdConfig.daemonMode {
     // After setup, output will be redirected to /dev/null
 }
 
-let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled, daemonMode: cmdConfig.daemonMode)
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled, daemonMode: cmdConfig.daemonMode, idleMode: cmdConfig.idleMode)
 
 if keyboardGuard.defaultSource == nil {
     if !cmdConfig.daemonMode {
@@ -835,6 +964,7 @@ if keyboardGuard.defaultSource == nil {
         print("Idle timeout: \(cmdConfig.timeout) seconds")
         print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
         print("Visual notifications: \(cmdConfig.visualEnabled ? "enabled (toast)" : "disabled")")
+        print("Idle detection: \(cmdConfig.idleMode.description)")
         print("Check interval: \(checkInterval) seconds")
         print("Monitoring...")
         fflush(stdout)

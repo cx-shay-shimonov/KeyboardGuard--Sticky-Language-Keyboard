@@ -163,6 +163,7 @@ If not found, a default configuration file will be created automatically.
 - **`--nosound`**: Disable sound effects (default: sound enabled)
 - **`--novisual`**: Disable toast notifications (default: visual enabled)
 - **`-d` or `--daemon`**: Run in background daemon mode (no terminal output)
+- **`--idle-mode MODE`**: Idle detection mode - keyboard, mouse, system (default: system)
 - **`-h` or `--help`**: Show help message with usage examples
 
 **Note**: Only languages enabled in your System Preferences will work. The program validates this automatically.
@@ -189,6 +190,35 @@ For production use, run KeyboardGuard in daemon mode to operate silently in the 
 - ✅ **Easy management** - Standard process control commands
 - ✅ **Resource efficient** - Minimal system impact
 
+### Idle Detection Modes
+
+KeyboardGuard offers three idle detection modes to suit different use cases:
+
+```bash
+# System detection (default - keyboard + mouse)
+./KeyboardGuard
+
+# Keyboard-only detection
+./KeyboardGuard --idle-mode keyboard
+
+# Mouse-only detection  
+./KeyboardGuard --idle-mode mouse
+```
+
+**Mode Comparison:**
+
+| Mode | Detects | Best For | Use Case |
+|------|---------|----------|----------|
+| **system** ⭐ | Both keyboard + mouse | **Most users** | Traditional system idle behavior |
+| **keyboard** | Keyboard activity only | Typing-focused users | Ignores mouse movements, focuses on typing |
+| **mouse** | Mouse activity only | Specific workflows | Only cares about mouse interaction |
+
+**Why system mode is default:**
+- 🖥️ **Familiar behavior** - Traditional system idle detection that users expect
+- ⚡ **Any activity counts** - Both typing and mouse movements reset the timer
+- 🔄 **Balanced approach** - Works well for most use cases and workflows
+- 💡 **Intuitive** - Matches standard system idle time behavior
+
 ### Sample Output
 
 ```
@@ -200,6 +230,7 @@ Behavior: Any non-english language -> English
 Idle timeout: 10.0 seconds
 Sound effects: enabled (Ping/Glass)
 Visual notifications: enabled (toast)
+Idle detection: system (keyboard + mouse)
 Check interval: 2.0 seconds
 Monitoring...
 Running initial check...
@@ -248,8 +279,14 @@ Hebrew session ended
 # Background daemon mode (no terminal output)
 ./KeyboardGuard --daemon
 
-# Daemon mode with custom settings
-./KeyboardGuard --daemon -l portuguese -t 30
+# Mouse-only idle detection
+./KeyboardGuard --idle-mode mouse
+
+# System idle detection (keyboard + mouse)
+./KeyboardGuard --idle-mode system -t 30
+
+# Daemon mode with mouse-only detection
+./KeyboardGuard --daemon --idle-mode mouse -l portuguese
 
 # Portuguese with custom settings
 ./KeyboardGuard -l portuguese --nosound -t 30
