@@ -73,7 +73,7 @@ func loadConfiguration() -> Configuration {
         defaultConfiguration: Configuration.DefaultConfiguration(
             idleTimeout: 10.0,
             defaultLanguage: "english",
-            checkInterval: 2.0
+            checkInterval: 1.0
         )
     )
 }
@@ -96,7 +96,7 @@ func createDefaultConfigFile(at url: URL) {
         defaultConfiguration: Configuration.DefaultConfiguration(
             idleTimeout: 10.0,
             defaultLanguage: "english",
-            checkInterval: 2.0
+            checkInterval: 1.0
         )
     )
     
