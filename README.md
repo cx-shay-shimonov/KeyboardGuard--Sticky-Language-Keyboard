@@ -19,6 +19,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
 - 🔊 **Audio feedback**: System sound effects (Ping for success, Glass for errors)
 - 🍞 **Visual notifications**: Non-intrusive toast notifications for language switches
+- 🔧 **Daemon mode**: Run silently in background without terminal output
 - 📝 **Extensible configuration**: JSON configuration file allows users to add custom languages
 
 ### How it works
@@ -161,9 +162,32 @@ If not found, a default configuration file will be created automatically.
 - **`-l LANGUAGE` or `--language LANGUAGE`**: Default language to switch TO
 - **`--nosound`**: Disable sound effects (default: sound enabled)
 - **`--novisual`**: Disable toast notifications (default: visual enabled)
+- **`-d` or `--daemon`**: Run in background daemon mode (no terminal output)
 - **`-h` or `--help`**: Show help message with usage examples
 
 **Note**: Only languages enabled in your System Preferences will work. The program validates this automatically.
+
+### Daemon Mode
+
+For production use, run KeyboardGuard in daemon mode to operate silently in the background:
+
+```bash
+# Run in daemon mode (recommended for daily use)
+./KeyboardGuard --daemon
+
+# Daemon mode with custom settings
+./KeyboardGuard --daemon -l portuguese -t 30
+
+# Completely silent daemon (no audio/visual feedback)
+./KeyboardGuard --daemon --nosound --novisual
+```
+
+**Daemon Mode Benefits:**
+- ✅ **No terminal required** - Runs independently of terminal session
+- ✅ **Silent operation** - No output unless there are errors
+- ✅ **Clean background process** - Proper daemon behavior
+- ✅ **Easy management** - Standard process control commands
+- ✅ **Resource efficient** - Minimal system impact
 
 ### Sample Output
 
@@ -221,6 +245,12 @@ Hebrew session ended
 # Completely silent (no sound or visual)
 ./KeyboardGuard --nosound --novisual
 
+# Background daemon mode (no terminal output)
+./KeyboardGuard --daemon
+
+# Daemon mode with custom settings
+./KeyboardGuard --daemon -l portuguese -t 30
+
 # Portuguese with custom settings
 ./KeyboardGuard -l portuguese --nosound -t 30
 
@@ -244,7 +274,31 @@ swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Car
 
 ### Running in Background
 
-To run KeyboardGuard in the background:
+#### Option 1: Daemon Mode (Recommended) ⭐
+
+Use the built-in daemon mode for clean background operation:
+
+```bash
+# Run in daemon mode (no terminal output)
+./KeyboardGuard --daemon
+
+# Daemon mode with custom settings
+./KeyboardGuard --daemon -l portuguese -t 30
+
+# Check if running
+./check_status.sh
+
+# Stop daemon
+pkill KeyboardGuard
+```
+
+**Daemon Mode Benefits:**
+- ✅ **No terminal output** - Runs silently in background
+- ✅ **Clean process** - Proper background daemon behavior  
+- ✅ **Easy management** - Standard process control
+- ✅ **No log files** - Unless you redirect output manually
+
+#### Option 2: Manual Background (Legacy)
 
 ```bash
 # With default timeout

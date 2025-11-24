@@ -453,16 +453,19 @@ class KeyboardGuard {
     private let soundEnabled: Bool
     // Visual notification setting
     private let visualEnabled: Bool
+    // Daemon mode setting
+    private let daemonMode: Bool
     // Track previous language to detect switches
     private var previousLanguageID: String?
     // Track previous global idle time to detect typing
     private var previousGlobalIdleTime: TimeInterval = 0
     
-    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true) {
+    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true, daemonMode: Bool = false) {
         self.idleTimeout = idleTimeout
         self.defaultLanguageName = defaultLanguage
         self.soundEnabled = soundEnabled
         self.visualEnabled = visualEnabled
+        self.daemonMode = daemonMode
         
         // Get the default input source ID from the language mapping
         if let inputSourceID = supportedLanguages[defaultLanguage.lowercased()] {
@@ -475,7 +478,17 @@ class KeyboardGuard {
         // Look up the default input source once at startup.
         defaultSource = findInputSource(by: defaultInputSourceID)
         
-        print("Note: Using system idle time via IOKit for reliable typing detection.")
+        if !daemonMode {
+            print("Note: Using system idle time via IOKit for reliable typing detection.")
+        }
+    }
+    
+    /// Prints a message only if not in daemon mode
+    private func log(_ message: String) {
+        if !daemonMode {
+            print(message)
+            fflush(stdout)
+        }
     }
     
     /// Helper function to get language name from input source ID
@@ -500,7 +513,7 @@ class KeyboardGuard {
     /// The core function that checks the current state and switches the keyboard if necessary.
     @objc func runLanguageCheck() {
     guard let currentID = getCurrentInputSourceID() else {
-        print("[\(Date())] Could not determine current input source ID.")
+        log("[\(Date())] Could not determine current input source ID.")
         return
     }
 
@@ -523,11 +536,11 @@ class KeyboardGuard {
     // Handle non-default language session management
     if switchedToNonDefault {
         let currentLanguageName = getLanguageNameFromID(currentID)
-        print("[\(Date())] Switched TO \(currentLanguageName.capitalized) (non-default)")
+        log("[\(Date())] Switched TO \(currentLanguageName.capitalized) (non-default)")
         nonDefaultLanguageTimer.startNonDefaultLanguageSession(languageName: currentLanguageName)
         // IMPORTANT: Reset timer immediately when switching to secondary language
         nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
-        print("[\(Date())] Timer reset due to language switch")
+        log("[\(Date())] Timer reset due to language switch")
     } else if switchedToDefault {
         nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
     } else if !isCurrentlyDefault && !nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
@@ -568,11 +581,11 @@ class KeyboardGuard {
         
         // Use secondary language timer for switching decision
         if let secondaryIdleTime = nonDefaultLanguageTimer.getNonDefaultLanguageIdleTime() {
-            print("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. System: \(String(format: "%.1f", systemIdleTime))s. Typing: \(isCurrentlyTyping)")
+            log("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. System: \(String(format: "%.1f", systemIdleTime))s. Typing: \(isCurrentlyTyping)")
             
             // Switch based on secondary language idle time
             if secondaryIdleTime >= idleTimeout {
-                print("[\(Date())] \(currentLanguageName.capitalized) idle time exceeded \(idleTimeout)s. Switching to \(defaultLanguageName.capitalized).")
+                log("[\(Date())] \(currentLanguageName.capitalized) idle time exceeded \(idleTimeout)s. Switching to \(defaultLanguageName.capitalized).")
                 
                 guard let sourceToSwitchTo = defaultSource else {
                     print("[\(Date())] Error: Default input source ('\(defaultInputSourceID)') not found.")
@@ -604,7 +617,7 @@ class KeyboardGuard {
         }
     } else {
         // Currently in default language
-        print("[\(Date())] Active: \(currentName) (\(defaultLanguageName.capitalized)). Status OK.")
+        log("[\(Date())] Active: \(currentName) (\(defaultLanguageName.capitalized)). Status OK.")
     }
     
     // Flush output to ensure it appears immediately
@@ -619,6 +632,7 @@ struct ProgramConfig {
     let defaultLanguage: String
     let soundEnabled: Bool
     let visualEnabled: Bool
+    let daemonMode: Bool
 }
 
 func parseCommandLineArguments() -> ProgramConfig {
@@ -627,6 +641,7 @@ func parseCommandLineArguments() -> ProgramConfig {
     var defaultLanguage = defaultDefaultLanguage
     let soundEnabled = !arguments.contains("--nosound") // Default is true unless --nosound is provided
     let visualEnabled = !arguments.contains("--novisual") // Default is true unless --novisual is provided
+    let daemonMode = arguments.contains("--daemon") || arguments.contains("-d") // Default is false unless --daemon is provided
     
     // Check for help flag
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -694,6 +709,10 @@ func parseCommandLineArguments() -> ProgramConfig {
             // --novisual flag is already handled above, just skip it here
             break
             
+        case "--daemon", "-d":
+            // --daemon flag is already handled above, just skip it here
+            break
+            
         default:
             // Try to parse as timeout (backward compatibility)
             if let timeoutValue = TimeInterval(arg), timeoutValue > 0 {
@@ -718,7 +737,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         exit(1)
     }
     
-    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled)
+    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled, daemonMode: daemonMode)
 }
 
 func showHelp() {
@@ -734,6 +753,7 @@ func showHelp() {
     print("  -l, --language LANG    Default language to switch TO (default: \(defaultDefaultLanguage))")
     print("  --nosound              Disable sound effects (default: sound enabled)")
     print("  --novisual             Disable toast notifications (default: visual enabled)")
+    print("  -d, --daemon           Run in background daemon mode (no terminal output)")
     print("  -h, --help            Show this help message")
     print("")
     print("How it works:")
@@ -764,34 +784,66 @@ func showHelp() {
     print("  KeyboardGuard                          # Any non-English -> English, 10s timeout")
     print("  KeyboardGuard -l portuguese            # Any non-Portuguese -> Portuguese, 10s timeout")
     print("  KeyboardGuard -t 30                    # Any non-English -> English, 30s timeout")
-    print("  KeyboardGuard -l spanish -t 15         # Any non-Spanish -> Spanish, 15s timeout")
+    print("  KeyboardGuard --daemon                 # Run in background daemon mode")
+    print("  KeyboardGuard --daemon -l spanish -t 15  # Daemon mode with custom settings")
+    print("  KeyboardGuard --nosound --novisual     # Silent mode (no audio/visual feedback)")
     print("  KeyboardGuard --language french --time 45  # Any non-French -> French, 45s timeout")
     print("")
     print("Backward Compatibility:")
     print("  KeyboardGuard 30                       # Any non-English -> English, 30s timeout")
 }
 
+// MARK: - Daemon Mode Support
+
+/// Prepares the process for daemon mode by redirecting output
+func setupDaemonMode() {
+    print("KeyboardGuard starting in daemon mode (PID: \(getpid()))")
+    print("Use 'pkill KeyboardGuard' to stop, or './check_status.sh' to check status")
+    
+    // Redirect stdout and stderr to /dev/null to suppress output
+    let devNull = open("/dev/null", O_WRONLY)
+    if devNull != -1 {
+        dup2(devNull, STDOUT_FILENO)
+        dup2(devNull, STDERR_FILENO)
+        close(devNull)
+    }
+}
+
 // MARK: - Program Entry
 
 let cmdConfig = parseCommandLineArguments()
-let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled)
+
+// Handle daemon mode before creating KeyboardGuard instance
+if cmdConfig.daemonMode {
+    setupDaemonMode()
+    // After setup, output will be redirected to /dev/null
+}
+
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled, daemonMode: cmdConfig.daemonMode)
 
 if keyboardGuard.defaultSource == nil {
-    print("FATAL ERROR: The default input source could not be found. Please ensure \(cmdConfig.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
+    if !cmdConfig.daemonMode {
+        print("FATAL ERROR: The default input source could not be found. Please ensure \(cmdConfig.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
+    }
     exit(1)
 } else {
-    print("KeyboardGuard is starting.")
-    print("Default language: \(cmdConfig.defaultLanguage.capitalized)")
-    print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
-    print("Idle timeout: \(cmdConfig.timeout) seconds")
-    print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
-    print("Visual notifications: \(cmdConfig.visualEnabled ? "enabled (toast)" : "disabled")")
-    print("Check interval: \(checkInterval) seconds")
-    print("Monitoring...")
-    fflush(stdout)
+    // Only show startup messages if not in daemon mode
+    if !cmdConfig.daemonMode {
+        print("KeyboardGuard is starting.")
+        print("Default language: \(cmdConfig.defaultLanguage.capitalized)")
+        print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
+        print("Idle timeout: \(cmdConfig.timeout) seconds")
+        print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
+        print("Visual notifications: \(cmdConfig.visualEnabled ? "enabled (toast)" : "disabled")")
+        print("Check interval: \(checkInterval) seconds")
+        print("Monitoring...")
+        fflush(stdout)
+        
+        // Test the function immediately (only in interactive mode)
+        print("Running initial check...")
+    }
     
-    // Test the function immediately
-    print("Running initial check...")
+    // Run initial check
     keyboardGuard.runLanguageCheck()
 
     // Set up a repeating timer on the main run loop.
