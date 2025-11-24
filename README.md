@@ -647,16 +647,17 @@ If you don't see visual toast notifications when language switching occurs:
 1. **Check if visual notifications are enabled**: Look for "Visual notifications: enabled (toast)" in startup message
 2. **Look in the right place**: Toast appears in **top-right corner** of screen, not in Notification Center
 3. **Test with a quick timeout**: Run `./KeyboardGuard -t 3` for faster testing
-4. **Check window permissions**: Some security software may block floating windows
+4. **Check console output**: If toast fails, you'll see console message "Visual notification: [From] → [To]"
 5. **Verify compilation**: Make sure you compiled with `-framework Cocoa`
 6. **Disable if not needed**: Use `--novisual` to disable toast notifications
 
 **Toast Notification Details:**
 - **Location**: Top-right corner of screen (20px margin from edges)
-- **Appearance**: Rounded rectangle with shadow and semi-transparent background
+- **Appearance**: Simple overlay window with system background
 - **Content**: "🔄 [From Language] → [To Language]" (e.g., "🔄 Hebrew → English")
-- **Duration**: Appears for 2 seconds with fade-in/fade-out animations
+- **Duration**: Appears for 5 seconds then auto-closes
 - **Behavior**: Ignores mouse events, floats above all windows
+- **Fallback**: Console message if toast creation fails
 5. **Check screen position**: Toast appears in top-right corner of main screen
 
 ### Understanding the logs

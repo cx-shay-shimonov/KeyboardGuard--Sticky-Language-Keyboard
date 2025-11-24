@@ -157,96 +157,54 @@ func playFailureSound() {
 
 /// Shows a brief toast notification when language switches back to default
 /// 
-/// This function creates a custom NSWindow-based toast notification that appears
-/// in the top-right corner of the screen. Unlike native macOS notifications,
-/// this toast doesn't require notification permissions and provides immediate
-/// visual feedback without interfering with the main application run loop.
+/// This function creates a simple overlay window without NSApplication setup
+/// to avoid interfering with the main run loop.
 ///
 /// - Parameters:
 ///   - fromLanguage: The language we switched from (e.g., "hebrew")
 ///   - toLanguage: The default language we switched to (e.g., "english")
-///
-/// - Note: Uses DispatchQueue.main.async to ensure UI updates happen on main thread
-/// - Note: NSApplication.shared must be initialized for proper window display
-/// - Note: Toast auto-closes after 2 seconds with fade animation
 func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
+    // Use a simple approach that doesn't require NSApplication
     DispatchQueue.main.async {
-        // Create a borderless window for the toast overlay
-        // Size: 300x80 provides enough space for language names
+        // Create a simple borderless window
         let toastWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
-            styleMask: [.borderless], // No title bar or window controls
-            backing: .buffered,       // Double-buffered for smooth animations
-            defer: false             // Create window immediately
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
         )
         
-        // Configure window properties for toast appearance
-        toastWindow.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95) // Semi-transparent background
-        toastWindow.level = .floating           // Appear above all other windows
-        toastWindow.isOpaque = false           // Allow transparency effects
-        toastWindow.hasShadow = true           // Add subtle shadow for depth
-        toastWindow.ignoresMouseEvents = true  // Don't interfere with user interaction
+        // Configure window
+        toastWindow.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9)
+        toastWindow.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.floatingWindow)))
+        toastWindow.isOpaque = false
+        toastWindow.hasShadow = true
+        toastWindow.ignoresMouseEvents = true
         
-        // Create content view
+        // Create content
         let contentView = NSView(frame: toastWindow.contentRect(forFrameRect: toastWindow.frame))
         toastWindow.contentView = contentView
         
-        // Add rounded corners
-        contentView.wantsLayer = true
-        contentView.layer?.cornerRadius = 12
-        contentView.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95).cgColor
-        
-        // Create and configure the label
+        // Add text
         let label = NSTextField(labelWithString: "🔄 \(fromLanguage.capitalized) → \(toLanguage.capitalized)")
         label.font = NSFont.systemFont(ofSize: 16, weight: .medium)
-        label.textColor = NSColor.labelColor
         label.alignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        
+        label.frame = NSRect(x: 20, y: 30, width: 260, height: 20)
         contentView.addSubview(label)
         
-        // Center the label in the window
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 20),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -20)
-        ])
-        
-        // Position the window at the top-right of the screen
-        // Uses visibleFrame to avoid menu bar and dock areas
+        // Position at top-right
         if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame  // Excludes menu bar and dock
-            let windowFrame = toastWindow.frame
-            let x = screenFrame.maxX - windowFrame.width - 20   // 20px margin from right edge
-            let y = screenFrame.maxY - windowFrame.height - 20  // 20px margin from top edge
+            let screenFrame = screen.visibleFrame
+            let x = screenFrame.maxX - 320
+            let y = screenFrame.maxY - 100
             toastWindow.setFrameOrigin(NSPoint(x: x, y: y))
         }
         
-        // Show the window
-        toastWindow.makeKeyAndOrderFront(nil)
+        // Show and auto-close
+        toastWindow.orderFront(nil)
         
-        // Verify window is visible
-        guard toastWindow.isVisible else {
-            return // Silent fallback if window failed to show
-        }
-        
-        // Animate in
-        toastWindow.alphaValue = 0
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
-            toastWindow.animator().alphaValue = 1.0
-        }
-        
-        // Auto-close after 2 seconds with fade-out animation
-        // This ensures the toast doesn't stay on screen too long
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3  // 300ms fade-out animation
-                toastWindow.animator().alphaValue = 0.0
-            } completionHandler: {
-                toastWindow.close()     // Clean up window resources
-            }
+            toastWindow.close()
         }
     }
 }
@@ -388,17 +346,23 @@ class EnhancedIdleTimeMonitor {
         }
     }
     
-    /// Gets the appropriate idle time based on the configured mode
+    /// Gets the keyboard idle time - always based on keyboard activity
+    /// Mouse events can reset this timer in mouse mode, but we always measure keyboard idle time
     func getIdleTime() -> TimeInterval {
         let now = Date()
         
         switch idleMode {
         case .keyboard:
+            // Pure keyboard mode - only keyboard activity matters
             return now.timeIntervalSince(lastKeyboardActivity)
         case .mouse:
-            return now.timeIntervalSince(lastMouseActivity)
+            // Mouse mode - mouse events reset keyboard timer, but we still measure keyboard idle time
+            let keyboardIdle = now.timeIntervalSince(lastKeyboardActivity)
+            let mouseIdle = now.timeIntervalSince(lastMouseActivity)
+            // If mouse was active more recently, use that to reset keyboard timer
+            return min(keyboardIdle, mouseIdle)
         case .system:
-            // System idle time is the minimum of keyboard and mouse idle times
+            // System mode - either keyboard or mouse activity resets timer
             let keyboardIdle = now.timeIntervalSince(lastKeyboardActivity)
             let mouseIdle = now.timeIntervalSince(lastMouseActivity)
             return min(keyboardIdle, mouseIdle)
@@ -651,9 +615,9 @@ class KeyboardGuard {
     let switchedToNonDefault = !isCurrentlyDefault && wasDefaultPreviously
     let switchedToDefault = isCurrentlyDefault && !wasDefaultPreviously
     
-    // Get current idle time based on configured mode
-    let currentIdleTime = idleTimeMonitor.getIdleTime()
-    let isCurrentlyTyping = currentIdleTime < 1.0 // Consider "typing" if idle < 1 second
+    // Get system idle time for typing detection (more reliable than CGEvent taps)
+    let systemIdleTime = idleTimeMonitor.getSystemIdleTime()
+    let isCurrentlyTyping = systemIdleTime < 1.0 // Consider "typing" if idle < 1 second
     
     // Handle non-default language session management
     if switchedToNonDefault {
@@ -690,20 +654,21 @@ class KeyboardGuard {
             nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
         }
         
-        // Detect typing by checking if idle time decreased or is very small
-        let typingDetected = currentIdleTime < previousGlobalIdleTime || currentIdleTime < 0.5
+        // Detect typing by checking if system idle time decreased or is very small
+        // Use reliable IOKit system idle time for typing detection
+        let typingDetected = systemIdleTime < previousGlobalIdleTime || systemIdleTime < 0.5
         
         if typingDetected && nonDefaultLanguageTimer.isInNonDefaultLanguageSession() {
             nonDefaultLanguageTimer.recordNonDefaultLanguageActivity()
-            print("[\(Date())] Timer reset due to typing detected (idle: \(String(format: "%.1f", currentIdleTime))s, prev: \(String(format: "%.1f", previousGlobalIdleTime))s)")
+            print("[\(Date())] Timer reset due to typing detected (system idle: \(String(format: "%.1f", systemIdleTime))s, prev: \(String(format: "%.1f", previousGlobalIdleTime))s)")
         }
         
         // Update previous idle time for next comparison
-        previousGlobalIdleTime = currentIdleTime
+        previousGlobalIdleTime = systemIdleTime
         
         // Use secondary language timer for switching decision
         if let secondaryIdleTime = nonDefaultLanguageTimer.getNonDefaultLanguageIdleTime() {
-            log("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. Current: \(String(format: "%.1f", currentIdleTime))s. Typing: \(isCurrentlyTyping)")
+            log("[\(Date())] Active: \(currentName). \(currentLanguageName.capitalized) Idle Time: \(String(format: "%.1f", secondaryIdleTime))s. System: \(String(format: "%.1f", systemIdleTime))s. Typing: \(isCurrentlyTyping)")
             
             // Switch based on secondary language idle time
             if secondaryIdleTime >= idleTimeout {
@@ -729,7 +694,8 @@ class KeyboardGuard {
                 
                 // Show toast notification if enabled
                 if visualEnabled {
-                    showLanguageSwitchToast(from: currentLanguageName, to: defaultLanguageName)
+                    // Temporarily disabled to prevent crashes - will fix in next iteration
+                    print("[\(Date())] Visual notification: \(currentLanguageName.capitalized) → \(defaultLanguageName.capitalized)")
                 }
                 
                 nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
@@ -955,13 +921,8 @@ func setupDaemonMode() {
 
 let cmdConfig = parseCommandLineArguments()
 
-// Initialize NSApplication for toast notifications, but don't interfere with main run loop
-// This is required for NSWindow-based toast notifications to display properly
-if cmdConfig.visualEnabled && !cmdConfig.daemonMode {
-    // Initialize NSApplication but don't call run() - let RunLoop.current.run() handle it
-    _ = NSApplication.shared
-    NSApplication.shared.setActivationPolicy(.accessory) // Run as accessory app (no dock icon)
-}
+// Note: NSApplication initialization completely removed to prevent run loop interference
+// Toast notifications will use a different approach that doesn't require NSApplication setup
 
 // Handle daemon mode before creating KeyboardGuard instance
 if cmdConfig.daemonMode {
