@@ -17,6 +17,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - ✅ **Language validation**: Automatically checks if languages are enabled on your system
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
 - 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
+- 🔊 **Audio feedback**: System sound effects (Ping for success, Glass for errors)
 - 📝 **Extensible configuration**: JSON configuration file allows users to add custom languages
 
 ### How it works
@@ -79,7 +80,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 
 3. **Compile**:
    ```bash
-   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
+   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit -framework AudioToolbox
    ```
 
 **✅ Benefits**: Latest development version, ability to modify source code.
@@ -157,6 +158,7 @@ If not found, a default configuration file will be created automatically.
 - **No arguments**: Uses default timeout of 10 seconds and English as default language
 - **`-t SECONDS` or `--time SECONDS`**: Idle timeout in seconds (must be positive)
 - **`-l LANGUAGE` or `--language LANGUAGE`**: Default language to switch TO
+- **`--nosound`**: Disable sound effects (default: sound enabled)
 - **`-h` or `--help`**: Show help message with usage examples
 
 **Note**: Only languages enabled in your System Preferences will work. The program validates this automatically.
@@ -170,6 +172,7 @@ KeyboardGuard is starting.
 Default language: English
 Behavior: Any non-english language -> English
 Idle timeout: 10.0 seconds
+Sound effects: enabled (Ping/Glass)
 Check interval: 2.0 seconds
 Monitoring...
 Running initial check...
@@ -205,6 +208,12 @@ Hebrew session ended
 
 # Spanish with custom timeout
 ./KeyboardGuard --language spanish --time 15
+
+# Silent mode (no sound effects)
+./KeyboardGuard --nosound
+
+# Portuguese with silent mode and custom timeout
+./KeyboardGuard -l portuguese --nosound -t 30
 
 # Check available options and see what languages are enabled
 ./KeyboardGuard --help
@@ -489,6 +498,20 @@ To enable 'portuguese' keyboard layout:
 - Make sure you have the required permissions (see Permissions section above)
 - Try running with explicit output: `./KeyboardGuard 2>&1`
 - Check if multiple instances are running: `./check_status.sh`
+
+### Sound Effects Not Working
+
+If you don't hear sound effects when language switching occurs:
+
+1. **Check system volume**: Make sure your Mac's volume is turned up
+2. **Test sound files directly**:
+   ```bash
+   afplay /System/Library/Sounds/Ping.aiff    # Success sound
+   afplay /System/Library/Sounds/Glass.aiff   # Failure sound
+   ```
+3. **Check sound preferences**: Go to System Preferences → Sound → Sound Effects
+4. **Use silent mode if needed**: Run with `--nosound` to disable sound effects
+5. **Verify compilation**: Make sure you compiled with `-framework AudioToolbox`
 
 ### Understanding the logs
 

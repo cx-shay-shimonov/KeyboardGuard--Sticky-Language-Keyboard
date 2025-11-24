@@ -5,6 +5,8 @@ import Carbon
 import AppKit
 // IOKit for system idle time detection via HIDIdleTime
 import IOKit
+// AudioToolbox for sound effects
+import AudioToolbox
 
 // MARK: - Configuration
 
@@ -121,6 +123,33 @@ let supportedLanguages = globalConfig.supportedLanguages
 let defaultIdleTimeout = globalConfig.defaultConfiguration.idleTimeout
 let defaultDefaultLanguage = globalConfig.defaultConfiguration.defaultLanguage
 let checkInterval = globalConfig.defaultConfiguration.checkInterval
+
+// MARK: - Sound Effects
+
+/// Plays a system sound by name
+/// - Parameter soundName: The name of the sound file (e.g., "Ping", "Glass")
+func playSound(_ soundName: String) {
+    let task = Process()
+    task.launchPath = "/usr/bin/afplay"
+    task.arguments = ["/System/Library/Sounds/\(soundName).aiff"]
+    
+    do {
+        try task.run()
+        // Don't wait - let it play in background
+    } catch {
+        // Silent fallback - don't print errors during normal operation
+    }
+}
+
+/// Plays success sound when language switching succeeds
+func playSuccessSound() {
+    playSound("Ping")
+}
+
+/// Plays failure sound when language switching fails
+func playFailureSound() {
+    playSound("Glass")
+}
 
 // MARK: - TIS (Text Input Services) Utilities
 
@@ -333,14 +362,17 @@ class KeyboardGuard {
     // Default language info (what to switch TO)
     private let defaultInputSourceID: String
     private let defaultLanguageName: String
+    // Sound effect setting
+    private let soundEnabled: Bool
     // Track previous language to detect switches
     private var previousLanguageID: String?
     // Track previous global idle time to detect typing
     private var previousGlobalIdleTime: TimeInterval = 0
     
-    init(idleTimeout: TimeInterval, defaultLanguage: String) {
+    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true) {
         self.idleTimeout = idleTimeout
         self.defaultLanguageName = defaultLanguage
+        self.soundEnabled = soundEnabled
         
         // Get the default input source ID from the language mapping
         if let inputSourceID = supportedLanguages[defaultLanguage.lowercased()] {
@@ -454,10 +486,22 @@ class KeyboardGuard {
                 
                 guard let sourceToSwitchTo = defaultSource else {
                     print("[\(Date())] Error: Default input source ('\(defaultInputSourceID)') not found.")
+                    
+                    // Play failure sound if enabled
+                    if soundEnabled {
+                        playFailureSound()
+                    }
+                    
                     return
                 }
                 
                 selectInputSource(sourceToSwitchTo)
+                
+                // Play success sound if enabled
+                if soundEnabled {
+                    playSuccessSound()
+                }
+                
                 nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
             }
         } else {
@@ -478,12 +522,14 @@ class KeyboardGuard {
 struct ProgramConfig {
     let timeout: TimeInterval
     let defaultLanguage: String
+    let soundEnabled: Bool
 }
 
 func parseCommandLineArguments() -> ProgramConfig {
     let arguments = CommandLine.arguments
     var timeout = defaultIdleTimeout
     var defaultLanguage = defaultDefaultLanguage
+    let soundEnabled = !arguments.contains("--nosound") // Default is true unless --nosound is provided
     
     // Check for help flag
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -543,6 +589,10 @@ func parseCommandLineArguments() -> ProgramConfig {
                 exit(1)
             }
             
+        case "--nosound":
+            // --nosound flag is already handled above, just skip it here
+            break
+            
         default:
             // Try to parse as timeout (backward compatibility)
             if let timeoutValue = TimeInterval(arg), timeoutValue > 0 {
@@ -567,7 +617,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         exit(1)
     }
     
-    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage)
+    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled)
 }
 
 func showHelp() {
@@ -581,6 +631,7 @@ func showHelp() {
     print("Options:")
     print("  -t, --time SECONDS     Idle timeout in seconds (default: \(Int(defaultIdleTimeout)))")
     print("  -l, --language LANG    Default language to switch TO (default: \(defaultDefaultLanguage))")
+    print("  --nosound              Disable sound effects (default: sound enabled)")
     print("  -h, --help            Show this help message")
     print("")
     print("How it works:")
@@ -621,7 +672,7 @@ func showHelp() {
 // MARK: - Program Entry
 
 let cmdConfig = parseCommandLineArguments()
-let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage)
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled)
 
 if keyboardGuard.defaultSource == nil {
     print("FATAL ERROR: The default input source could not be found. Please ensure \(cmdConfig.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
@@ -631,6 +682,7 @@ if keyboardGuard.defaultSource == nil {
     print("Default language: \(cmdConfig.defaultLanguage.capitalized)")
     print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
     print("Idle timeout: \(cmdConfig.timeout) seconds")
+    print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
     print("Check interval: \(checkInterval) seconds")
     print("Monitoring...")
     fflush(stdout)
