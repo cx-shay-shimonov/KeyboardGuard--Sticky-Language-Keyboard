@@ -38,12 +38,16 @@ mkdir -p "${RELEASE_DIR}"
 cp KeyboardGuard "${RELEASE_DIR}/"
 cp languages.json "${RELEASE_DIR}/"
 cp find_input_sources.swift "${RELEASE_DIR}/"
+cp add_program_to_startup.sh "${RELEASE_DIR}/"
+cp remove_program_from_startup.sh "${RELEASE_DIR}/"
 cp README.md "${RELEASE_DIR}/"
 cp LICENSE "${RELEASE_DIR}/"
 
 # Make scripts executable
 chmod +x "${RELEASE_DIR}/KeyboardGuard"
 chmod +x "${RELEASE_DIR}/find_input_sources.swift"
+chmod +x "${RELEASE_DIR}/add_program_to_startup.sh"
+chmod +x "${RELEASE_DIR}/remove_program_from_startup.sh"
 
 # Copy the installation script (which handles code signing issues)
 echo "📄 Copying installation script..."

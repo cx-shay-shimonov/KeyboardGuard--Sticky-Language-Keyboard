@@ -296,24 +296,51 @@ The project includes a `check_status.sh` script that provides a comprehensive ov
 === Status Check Complete ===
 ```
 
-**Stop all instances:**
+**Management Commands:**
 ```bash
-# Kill all running processes
-pkill KeyboardGuard
+# Add to startup (LaunchAgent method)
+./add_program_to_startup.sh
 
-# Stop LaunchAgent (if running)
-launchctl stop com.user.keyboardguard
-launchctl unload ~/Library/LaunchAgents/com.user.keyboardguard.plist
+# Remove from startup
+./remove_program_from_startup.sh
 
-# Verify everything is stopped
+# Check current status
 ./check_status.sh
+
+# Manual control (if using LaunchAgent)
+launchctl stop com.user.keyboardguard    # Stop temporarily
+launchctl start com.user.keyboardguard   # Start again
+
+# Kill all running processes (emergency stop)
+pkill KeyboardGuard
 ```
 
 ## Auto-Start on Login
 
-To have KeyboardGuard automatically start when you log into macOS, you have several options:
+To have KeyboardGuard automatically start when you log into macOS, use the included setup scripts:
 
-### Option 1: LaunchAgent (Recommended)
+### Quick Setup (Recommended) ⭐
+
+**One-command setup:**
+```bash
+./add_program_to_startup.sh
+```
+
+This script will:
+- ✅ Create a macOS LaunchAgent (most reliable method)
+- ✅ Start KeyboardGuard immediately
+- ✅ Enable auto-start on every login
+- ✅ Set up logging to `~/Library/Logs/keyboardguard.log`
+- ✅ Show management commands
+
+**To remove from startup:**
+```bash
+./remove_program_from_startup.sh
+```
+
+### Manual LaunchAgent Setup
+
+If you prefer manual setup:
 
 This is the most reliable method that integrates properly with macOS.
 
