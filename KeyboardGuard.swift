@@ -7,6 +7,8 @@ import AppKit
 import IOKit
 // AudioToolbox for sound effects
 import AudioToolbox
+// Cocoa for toast notifications
+import Cocoa
 
 // MARK: - Configuration
 
@@ -23,7 +25,7 @@ struct Configuration: Codable {
 }
 
 /// Global configuration loaded from JSON file
-var globalConfig: Configuration!
+private var globalConfig: Configuration?
 
 /// Loads configuration from languages.json file
 func loadConfiguration() -> Configuration {
@@ -119,10 +121,10 @@ let jsonConfig = loadConfiguration()
 globalConfig = jsonConfig
 
 // Make configuration easily accessible
-let supportedLanguages = globalConfig.supportedLanguages
-let defaultIdleTimeout = globalConfig.defaultConfiguration.idleTimeout
-let defaultDefaultLanguage = globalConfig.defaultConfiguration.defaultLanguage
-let checkInterval = globalConfig.defaultConfiguration.checkInterval
+let supportedLanguages = jsonConfig.supportedLanguages
+let defaultIdleTimeout = jsonConfig.defaultConfiguration.idleTimeout
+let defaultDefaultLanguage = jsonConfig.defaultConfiguration.defaultLanguage
+let checkInterval = jsonConfig.defaultConfiguration.checkInterval
 
 // MARK: - Sound Effects
 
@@ -149,6 +151,91 @@ func playSuccessSound() {
 /// Plays failure sound when language switching fails
 func playFailureSound() {
     playSound("Glass")
+}
+
+// MARK: - Visual Toast Notifications
+
+/// Shows a brief toast notification when language switches back to default
+/// - Parameters:
+///   - fromLanguage: The language we switched from
+///   - toLanguage: The default language we switched to
+func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
+    DispatchQueue.main.async {
+        // Create a small overlay window for the toast
+        let toastWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        
+        // Configure window properties
+        toastWindow.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95)
+        toastWindow.level = .floating
+        toastWindow.isOpaque = false
+        toastWindow.hasShadow = true
+        toastWindow.ignoresMouseEvents = true
+        
+        // Create content view
+        let contentView = NSView(frame: toastWindow.contentRect(forFrameRect: toastWindow.frame))
+        toastWindow.contentView = contentView
+        
+        // Add rounded corners
+        contentView.wantsLayer = true
+        contentView.layer?.cornerRadius = 12
+        contentView.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.95).cgColor
+        
+        // Create and configure the label
+        let label = NSTextField(labelWithString: "🔄 \(fromLanguage.capitalized) → \(toLanguage.capitalized)")
+        label.font = NSFont.systemFont(ofSize: 16, weight: .medium)
+        label.textColor = NSColor.labelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        
+        contentView.addSubview(label)
+        
+        // Center the label in the window
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 20),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -20)
+        ])
+        
+        // Position the window at the top-right of the screen
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let windowFrame = toastWindow.frame
+            let x = screenFrame.maxX - windowFrame.width - 20
+            let y = screenFrame.maxY - windowFrame.height - 20
+            toastWindow.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        
+        // Show the window
+        toastWindow.makeKeyAndOrderFront(nil)
+        
+        // Verify window is visible
+        guard toastWindow.isVisible else {
+            return // Silent fallback if window failed to show
+        }
+        
+        // Animate in
+        toastWindow.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.3
+            toastWindow.animator().alphaValue = 1.0
+        }
+        
+        // Auto-close after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                toastWindow.animator().alphaValue = 0.0
+            } completionHandler: {
+                toastWindow.close()
+            }
+        }
+    }
 }
 
 // MARK: - TIS (Text Input Services) Utilities
@@ -364,22 +451,25 @@ class KeyboardGuard {
     private let defaultLanguageName: String
     // Sound effect setting
     private let soundEnabled: Bool
+    // Visual notification setting
+    private let visualEnabled: Bool
     // Track previous language to detect switches
     private var previousLanguageID: String?
     // Track previous global idle time to detect typing
     private var previousGlobalIdleTime: TimeInterval = 0
     
-    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true) {
+    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true) {
         self.idleTimeout = idleTimeout
         self.defaultLanguageName = defaultLanguage
         self.soundEnabled = soundEnabled
+        self.visualEnabled = visualEnabled
         
         // Get the default input source ID from the language mapping
         if let inputSourceID = supportedLanguages[defaultLanguage.lowercased()] {
             self.defaultInputSourceID = inputSourceID
         } else {
             print("ERROR: Unsupported default language '\(defaultLanguage)'. Falling back to English.")
-            self.defaultInputSourceID = supportedLanguages["english"]!
+            self.defaultInputSourceID = supportedLanguages["english"] ?? "com.apple.keylayout.ABC"
         }
         
         // Look up the default input source once at startup.
@@ -502,6 +592,11 @@ class KeyboardGuard {
                     playSuccessSound()
                 }
                 
+                // Show toast notification if enabled
+                if visualEnabled {
+                    showLanguageSwitchToast(from: currentLanguageName, to: defaultLanguageName)
+                }
+                
                 nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
             }
         } else {
@@ -523,6 +618,7 @@ struct ProgramConfig {
     let timeout: TimeInterval
     let defaultLanguage: String
     let soundEnabled: Bool
+    let visualEnabled: Bool
 }
 
 func parseCommandLineArguments() -> ProgramConfig {
@@ -530,6 +626,7 @@ func parseCommandLineArguments() -> ProgramConfig {
     var timeout = defaultIdleTimeout
     var defaultLanguage = defaultDefaultLanguage
     let soundEnabled = !arguments.contains("--nosound") // Default is true unless --nosound is provided
+    let visualEnabled = !arguments.contains("--novisual") // Default is true unless --novisual is provided
     
     // Check for help flag
     if arguments.contains("-h") || arguments.contains("--help") {
@@ -593,6 +690,10 @@ func parseCommandLineArguments() -> ProgramConfig {
             // --nosound flag is already handled above, just skip it here
             break
             
+        case "--novisual":
+            // --novisual flag is already handled above, just skip it here
+            break
+            
         default:
             // Try to parse as timeout (backward compatibility)
             if let timeoutValue = TimeInterval(arg), timeoutValue > 0 {
@@ -617,7 +718,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         exit(1)
     }
     
-    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled)
+    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled)
 }
 
 func showHelp() {
@@ -632,6 +733,7 @@ func showHelp() {
     print("  -t, --time SECONDS     Idle timeout in seconds (default: \(Int(defaultIdleTimeout)))")
     print("  -l, --language LANG    Default language to switch TO (default: \(defaultDefaultLanguage))")
     print("  --nosound              Disable sound effects (default: sound enabled)")
+    print("  --novisual             Disable toast notifications (default: visual enabled)")
     print("  -h, --help            Show this help message")
     print("")
     print("How it works:")
@@ -672,7 +774,7 @@ func showHelp() {
 // MARK: - Program Entry
 
 let cmdConfig = parseCommandLineArguments()
-let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled)
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled)
 
 if keyboardGuard.defaultSource == nil {
     print("FATAL ERROR: The default input source could not be found. Please ensure \(cmdConfig.defaultLanguage.capitalized) keyboard layout is enabled in Keyboard Settings > Input Sources.")
@@ -683,6 +785,7 @@ if keyboardGuard.defaultSource == nil {
     print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
     print("Idle timeout: \(cmdConfig.timeout) seconds")
     print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
+    print("Visual notifications: \(cmdConfig.visualEnabled ? "enabled (toast)" : "disabled")")
     print("Check interval: \(checkInterval) seconds")
     print("Monitoring...")
     fflush(stdout)

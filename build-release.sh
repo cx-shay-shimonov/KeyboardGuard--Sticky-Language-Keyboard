@@ -17,6 +17,7 @@ swiftc KeyboardGuard.swift -o KeyboardGuard \
   -framework AppKit \
   -framework IOKit \
   -framework AudioToolbox \
+  -framework Cocoa \
   -O \
   -whole-module-optimization
 

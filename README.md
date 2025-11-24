@@ -18,6 +18,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
 - 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
 - 🔊 **Audio feedback**: System sound effects (Ping for success, Glass for errors)
+- 🍞 **Visual notifications**: Non-intrusive toast notifications for language switches
 - 📝 **Extensible configuration**: JSON configuration file allows users to add custom languages
 
 ### How it works
@@ -80,7 +81,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 
 3. **Compile**:
    ```bash
-   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit -framework AudioToolbox
+   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit -framework AudioToolbox -framework Cocoa
    ```
 
 **✅ Benefits**: Latest development version, ability to modify source code.
@@ -159,6 +160,7 @@ If not found, a default configuration file will be created automatically.
 - **`-t SECONDS` or `--time SECONDS`**: Idle timeout in seconds (must be positive)
 - **`-l LANGUAGE` or `--language LANGUAGE`**: Default language to switch TO
 - **`--nosound`**: Disable sound effects (default: sound enabled)
+- **`--novisual`**: Disable toast notifications (default: visual enabled)
 - **`-h` or `--help`**: Show help message with usage examples
 
 **Note**: Only languages enabled in your System Preferences will work. The program validates this automatically.
@@ -173,6 +175,7 @@ Default language: English
 Behavior: Any non-english language -> English
 Idle timeout: 10.0 seconds
 Sound effects: enabled (Ping/Glass)
+Visual notifications: enabled (toast)
 Check interval: 2.0 seconds
 Monitoring...
 Running initial check...
@@ -212,7 +215,13 @@ Hebrew session ended
 # Silent mode (no sound effects)
 ./KeyboardGuard --nosound
 
-# Portuguese with silent mode and custom timeout
+# No visual notifications (sound only)
+./KeyboardGuard --novisual
+
+# Completely silent (no sound or visual)
+./KeyboardGuard --nosound --novisual
+
+# Portuguese with custom settings
 ./KeyboardGuard -l portuguese --nosound -t 30
 
 # Check available options and see what languages are enabled
@@ -512,6 +521,16 @@ If you don't hear sound effects when language switching occurs:
 3. **Check sound preferences**: Go to System Preferences → Sound → Sound Effects
 4. **Use silent mode if needed**: Run with `--nosound` to disable sound effects
 5. **Verify compilation**: Make sure you compiled with `-framework AudioToolbox`
+
+### Toast Notifications Not Appearing
+
+If you don't see visual toast notifications when language switching occurs:
+
+1. **Check if visual notifications are enabled**: Look for "Visual notifications: enabled (toast)" in startup message
+2. **Test with a quick timeout**: Run `./KeyboardGuard -t 3` for faster testing
+3. **Disable if not needed**: Use `--novisual` to disable toast notifications
+4. **Verify compilation**: Make sure you compiled with `-framework Cocoa`
+5. **Check screen position**: Toast appears in top-right corner of main screen
 
 ### Understanding the logs
 
