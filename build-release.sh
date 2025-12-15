@@ -14,10 +14,7 @@ echo "📦 Compiling optimized binary..."
 swiftc KeyboardGuard.swift -o KeyboardGuard \
   -framework Foundation \
   -framework Carbon \
-  -framework AppKit \
   -framework IOKit \
-  -framework AudioToolbox \
-  -framework Cocoa \
   -O \
   -whole-module-optimization
 

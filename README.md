@@ -18,9 +18,9 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 - 🛠️ **Status checking**: Built-in tools to monitor background processes
 - 🔧 **No permissions required**: Uses system APIs without needing Accessibility permissions
 - 🔊 **Audio feedback**: System sound effects (Ping for success, Glass for errors)
-- 🍞 **Visual notifications**: Non-intrusive toast notifications for language switches
 - 🔧 **Daemon mode**: Run silently in background without terminal output
 - 📝 **Extensible configuration**: JSON configuration file allows users to add custom languages
+- ⚡ **Minimal dependencies**: Optimized with only essential frameworks (Foundation, Carbon, IOKit)
 
 ### How it works
 
@@ -82,7 +82,7 @@ KeyboardGuard monitors your keyboard activity and automatically switches from AN
 
 3. **Compile**:
    ```bash
-   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit -framework AudioToolbox -framework Cocoa
+   swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework IOKit
    ```
 
 **✅ Benefits**: Latest development version, ability to modify source code.
@@ -161,7 +161,6 @@ If not found, a default configuration file will be created automatically.
 - **`-t SECONDS` or `--time SECONDS`**: Idle timeout in seconds (must be positive)
 - **`-l LANGUAGE` or `--language LANGUAGE`**: Default language to switch TO
 - **`--nosound`**: Disable sound effects (default: sound enabled)
-- **`--novisual`**: Disable toast notifications (default: visual enabled)
 - **`-d` or `--daemon`**: Run in background daemon mode (no terminal output)
 - **`--idle-mode MODE`**: Idle detection mode - keyboard, mouse, system (default: system)
 - **`-h` or `--help`**: Show help message with usage examples
@@ -179,8 +178,8 @@ For production use, run KeyboardGuard in daemon mode to operate silently in the 
 # Daemon mode with custom settings
 ./KeyboardGuard --daemon -l portuguese -t 30
 
-# Completely silent daemon (no audio/visual feedback)
-./KeyboardGuard --daemon --nosound --novisual
+# Silent daemon (no audio feedback)
+./KeyboardGuard --daemon --nosound
 ```
 
 **Daemon Mode Benefits:**
@@ -229,7 +228,6 @@ Default language: English
 Behavior: Any non-english language -> English
 Idle timeout: 10.0 seconds
 Sound effects: enabled (Ping/Glass)
-Visual notifications: enabled (toast)
 Idle detection: system (keyboard + mouse)
 Check interval: 2.0 seconds
 Monitoring...
@@ -270,11 +268,8 @@ Hebrew session ended
 # Silent mode (no sound effects)
 ./KeyboardGuard --nosound
 
-# No visual notifications (sound only)
-./KeyboardGuard --novisual
-
-# Completely silent (no sound or visual)
-./KeyboardGuard --nosound --novisual
+# Silent mode (no sound)
+./KeyboardGuard --nosound
 
 # Background daemon mode (no terminal output)
 ./KeyboardGuard --daemon
@@ -306,7 +301,7 @@ Hebrew session ended
 **From Source**:
 ```bash
 git pull origin main
-swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
+swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework IOKit
 ```
 
 ### Running in Background
@@ -556,7 +551,7 @@ let checkInterval: TimeInterval = 2.0       // How often to check (seconds)
 After making source code changes, recompile:
 
 ```bash
-swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework AppKit -framework IOKit
+swiftc KeyboardGuard.swift -o KeyboardGuard -framework Foundation -framework Carbon -framework IOKit
 ```
 
 ## Permissions
@@ -638,27 +633,7 @@ If you don't hear sound effects when language switching occurs:
    ```
 3. **Check sound preferences**: Go to System Preferences → Sound → Sound Effects
 4. **Use silent mode if needed**: Run with `--nosound` to disable sound effects
-5. **Verify compilation**: Make sure you compiled with `-framework AudioToolbox`
-
-### Toast Notifications Not Appearing
-
-If you don't see visual toast notifications when language switching occurs:
-
-1. **Check if visual notifications are enabled**: Look for "Visual notifications: enabled (toast)" in startup message
-2. **Look in the right place**: Toast appears in **top-right corner** of screen, not in Notification Center
-3. **Test with a quick timeout**: Run `./KeyboardGuard -t 3` for faster testing
-4. **Check console output**: If toast fails, you'll see console message "Visual notification: [From] → [To]"
-5. **Verify compilation**: Make sure you compiled with `-framework Cocoa`
-6. **Disable if not needed**: Use `--novisual` to disable toast notifications
-
-**Toast Notification Details:**
-- **Location**: Top-right corner of screen (20px margin from edges)
-- **Appearance**: Simple overlay window with system background
-- **Content**: "🔄 [From Language] → [To Language]" (e.g., "🔄 Hebrew → English")
-- **Duration**: Appears for 5 seconds then auto-closes
-- **Behavior**: Ignores mouse events, floats above all windows
-- **Fallback**: Console message if toast creation fails
-5. **Check screen position**: Toast appears in top-right corner of main screen
+5. **Verify compilation**: Make sure you compiled with all required frameworks
 
 ### Understanding the logs
 

@@ -1,14 +1,8 @@
 import Foundation
 // The Carbon module contains the necessary C functions for Text Input Services (TIS).
 import Carbon
-// AppKit for NSEvent.addLocalMonitorForEvents fallback
-import AppKit
 // IOKit for system idle time detection via HIDIdleTime
 import IOKit
-// AudioToolbox for sound effects
-import AudioToolbox
-// Cocoa for toast notifications
-import Cocoa
 
 // MARK: - Configuration
 
@@ -151,62 +145,6 @@ func playSuccessSound() {
 /// Plays failure sound when language switching fails
 func playFailureSound() {
     playSound("Glass")
-}
-
-// MARK: - Visual Toast Notifications
-
-/// Shows a brief toast notification when language switches back to default
-/// 
-/// This function creates a simple overlay window without NSApplication setup
-/// to avoid interfering with the main run loop.
-///
-/// - Parameters:
-///   - fromLanguage: The language we switched from (e.g., "hebrew")
-///   - toLanguage: The default language we switched to (e.g., "english")
-func showLanguageSwitchToast(from fromLanguage: String, to toLanguage: String) {
-    // Use a simple approach that doesn't require NSApplication
-    DispatchQueue.main.async {
-        // Create a simple borderless window
-        let toastWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        
-        // Configure window
-        toastWindow.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9)
-        toastWindow.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.floatingWindow)))
-        toastWindow.isOpaque = false
-        toastWindow.hasShadow = true
-        toastWindow.ignoresMouseEvents = true
-        
-        // Create content
-        let contentView = NSView(frame: toastWindow.contentRect(forFrameRect: toastWindow.frame))
-        toastWindow.contentView = contentView
-        
-        // Add text
-        let label = NSTextField(labelWithString: "🔄 \(fromLanguage.capitalized) → \(toLanguage.capitalized)")
-        label.font = NSFont.systemFont(ofSize: 16, weight: .medium)
-        label.alignment = .center
-        label.frame = NSRect(x: 20, y: 30, width: 260, height: 20)
-        contentView.addSubview(label)
-        
-        // Position at top-right
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let x = screenFrame.maxX - 320
-            let y = screenFrame.maxY - 100
-            toastWindow.setFrameOrigin(NSPoint(x: x, y: y))
-        }
-        
-        // Show and auto-close
-        toastWindow.orderFront(nil)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            toastWindow.close()
-        }
-    }
 }
 
 // MARK: - TIS (Text Input Services) Utilities
@@ -536,8 +474,6 @@ class KeyboardGuard {
     private let defaultLanguageName: String
     // Sound effect setting
     private let soundEnabled: Bool
-    // Visual notification setting
-    private let visualEnabled: Bool
     // Daemon mode setting
     private let daemonMode: Bool
     // Track previous language to detect switches
@@ -545,11 +481,10 @@ class KeyboardGuard {
     // Track previous global idle time to detect typing
     private var previousGlobalIdleTime: TimeInterval = 0
     
-    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, visualEnabled: Bool = true, daemonMode: Bool = false, idleMode: IdleMode = .system) {
+    init(idleTimeout: TimeInterval, defaultLanguage: String, soundEnabled: Bool = true, daemonMode: Bool = false, idleMode: IdleMode = .system) {
         self.idleTimeout = idleTimeout
         self.defaultLanguageName = defaultLanguage
         self.soundEnabled = soundEnabled
-        self.visualEnabled = visualEnabled
         self.daemonMode = daemonMode
         self.idleTimeMonitor = EnhancedIdleTimeMonitor(mode: idleMode)
         
@@ -691,13 +626,7 @@ class KeyboardGuard {
                 if soundEnabled {
                     playSuccessSound()
                 }
-                
-                // Show toast notification if enabled
-                if visualEnabled {
-                    // Temporarily disabled to prevent crashes - will fix in next iteration
-                    print("[\(Date())] Visual notification: \(currentLanguageName.capitalized) → \(defaultLanguageName.capitalized)")
-                }
-                
+                                
                 nonDefaultLanguageTimer.stopNonDefaultLanguageSession()
             }
         } else {
@@ -719,7 +648,6 @@ struct ProgramConfig {
     let timeout: TimeInterval
     let defaultLanguage: String
     let soundEnabled: Bool
-    let visualEnabled: Bool
     let daemonMode: Bool
     let idleMode: IdleMode
 }
@@ -729,7 +657,6 @@ func parseCommandLineArguments() -> ProgramConfig {
     var timeout = defaultIdleTimeout
     var defaultLanguage = defaultDefaultLanguage
     let soundEnabled = !arguments.contains("--nosound") // Default is true unless --nosound is provided
-    let visualEnabled = !arguments.contains("--novisual") // Default is true unless --novisual is provided
     let daemonMode = arguments.contains("--daemon") || arguments.contains("-d") // Default is false unless --daemon is provided
     var idleMode: IdleMode = .system // Default to system mode (keyboard + mouse)
     
@@ -794,11 +721,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         case "--nosound":
             // --nosound flag is already handled above, just skip it here
             break
-            
-        case "--novisual":
-            // --novisual flag is already handled above, just skip it here
-            break
-            
+    
         case "--daemon", "-d":
             // --daemon flag is already handled above, just skip it here
             break
@@ -843,7 +766,7 @@ func parseCommandLineArguments() -> ProgramConfig {
         exit(1)
     }
     
-    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, visualEnabled: visualEnabled, daemonMode: daemonMode, idleMode: idleMode)
+    return ProgramConfig(timeout: timeout, defaultLanguage: defaultLanguage, soundEnabled: soundEnabled, daemonMode: daemonMode, idleMode: idleMode)
 }
 
 func showHelp() {
@@ -858,7 +781,6 @@ func showHelp() {
     print("  -t, --time SECONDS     Idle timeout in seconds (default: \(Int(defaultIdleTimeout)))")
     print("  -l, --language LANG    Default language to switch TO (default: \(defaultDefaultLanguage))")
     print("  --nosound              Disable sound effects (default: sound enabled)")
-    print("  --novisual             Disable toast notifications (default: visual enabled)")
     print("  -d, --daemon           Run in background daemon mode (no terminal output)")
     print("  --idle-mode MODE       Idle detection mode: keyboard, mouse, system (default: system)")
     print("  -h, --help            Show this help message")
@@ -895,7 +817,6 @@ func showHelp() {
     print("  KeyboardGuard --idle-mode mouse        # Mouse-only idle detection")
     print("  KeyboardGuard --daemon                 # Run in background daemon mode")
     print("  KeyboardGuard --daemon --idle-mode keyboard -t 15  # Keyboard-only daemon mode")
-    print("  KeyboardGuard --nosound --novisual     # Silent mode (no audio/visual feedback)")
     print("")
     print("Backward Compatibility:")
     print("  KeyboardGuard 30                       # Any non-English -> English, 30s timeout")
@@ -922,7 +843,6 @@ func setupDaemonMode() {
 let cmdConfig = parseCommandLineArguments()
 
 // Note: NSApplication initialization completely removed to prevent run loop interference
-// Toast notifications will use a different approach that doesn't require NSApplication setup
 
 // Handle daemon mode before creating KeyboardGuard instance
 if cmdConfig.daemonMode {
@@ -930,7 +850,7 @@ if cmdConfig.daemonMode {
     // After setup, output will be redirected to /dev/null
 }
 
-let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, visualEnabled: cmdConfig.visualEnabled, daemonMode: cmdConfig.daemonMode, idleMode: cmdConfig.idleMode)
+let keyboardGuard = KeyboardGuard(idleTimeout: cmdConfig.timeout, defaultLanguage: cmdConfig.defaultLanguage, soundEnabled: cmdConfig.soundEnabled, daemonMode: cmdConfig.daemonMode, idleMode: cmdConfig.idleMode)
 
 if keyboardGuard.defaultSource == nil {
     if !cmdConfig.daemonMode {
@@ -945,7 +865,6 @@ if keyboardGuard.defaultSource == nil {
         print("Behavior: Any non-\(cmdConfig.defaultLanguage) language -> \(cmdConfig.defaultLanguage.capitalized)")
         print("Idle timeout: \(cmdConfig.timeout) seconds")
         print("Sound effects: \(cmdConfig.soundEnabled ? "enabled (Ping/Glass)" : "disabled")")
-        print("Visual notifications: \(cmdConfig.visualEnabled ? "enabled (toast)" : "disabled")")
         print("Idle detection: \(cmdConfig.idleMode.description)")
         print("Check interval: \(checkInterval) seconds")
         print("Monitoring...")
